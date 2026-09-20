@@ -30,6 +30,10 @@ def pivots(b,key):
     f=max if key=="h" else min
     return [b[i][key] for i in range(2,len(b)-2) if b[i][key]==f(x[key] for x in b[i-2:i+3])]
 
+def pivot_points(b,key):
+    f=max if key=="h" else min
+    return [(i,b[i][key]) for i in range(2,len(b)-2) if b[i][key]==f(x[key] for x in b[i-2:i+3])]
+
 def structure(b):
     h,l=pivots(b[-80:],"h"),pivots(b[-80:],"l")
     return len(h)>=2 and len(l)>=2 and h[-1]>h[-2] and l[-1]>l[-2]
@@ -75,8 +79,42 @@ class State:
         if sum(x["sector"]==sector for x in daily)>=cfg["max_sector_per_day"]:return "sector cap"
     def add(self,sig,now): self.d["alerts"]=[x for x in self.d["alerts"] if now-x["time"]<30*86400]; self.d["alerts"].append({"symbol":sig["symbol"],"sector":sig["sector"],"time":now}); self.save()
 
-def setup_names(b):
+def smc_setup(b,cfg):
+    """Bullish SMC confirmation for spot longs: BOS plus sweep/FVG/order-block retest."""
+    if not cfg.get("smc_enabled",True) or len(b)<80:return None
+    a=atr(b); price=b[-1]["c"]; highs=pivot_points(b[-80:-2],"h"); lows=pivot_points(b[-80:-2],"l")
+    if not highs or not lows:return None
+    swing_high=highs[-1][1]; swing_low=lows[-1][1]
+    bos=any(x["c"]>swing_high+a*.05 for x in b[-4:])
+    sweep=any(x["l"]<swing_low-a*.03 and x["c"]>swing_low for x in b[-6:])
+    min_gap=a*cfg.get("smc_min_gap_atr",.08)
+    tol=a*cfg.get("smc_retest_atr_tolerance",.30)
+    fvg=False
+    for i in range(max(2,len(b)-14),len(b)):
+        gap_low=b[i-2]["h"]; gap_high=b[i]["l"]
+        if gap_high-gap_low>=min_gap and gap_low-tol<=price<=gap_high+tol:
+            fvg=True; break
+    ob=False
+    for i in range(max(2,len(b)-16),len(b)-2):
+        candle=b[i]
+        if candle["c"]>=candle["o"]:continue
+        future=b[i+1:min(i+4,len(b))]
+        if not future:continue
+        displaced=any(x["c"]>candle["h"]+a*.35 and x["c"]>x["o"] for x in future)
+        if displaced and candle["l"]-tol<=price<=candle["h"]+tol:
+            ob=True; break
+    confirmations=[]
+    if sweep:confirmations.append("liquidity sweep")
+    if fvg:confirmations.append("FVG retest")
+    if ob:confirmations.append("order block retest")
+    if bos and confirmations:
+        return "SMC: BOS + " + " + ".join(confirmations[:2])
+    return None
+
+def setup_names(b,cfg):
     c=[x["c"] for x in b]; last,prev=b[-1],b[-2]; a=atr(b); e20=ema(c,20)[-1]; res=max(x["h"] for x in b[-22:-2]); vol=statistics.mean(x["v"] for x in b[-21:-1]); sup=pivots(b[:-1],"l"); f=[]
+    smc=smc_setup(b,cfg)
+    if smc:f.append(smc)
     if (last["c"]>res and last["v"]>=vol*1.10) or (prev["c"]>res and last["l"]<=res+a*.45 and last["c"]>res):f.append("breakout/retest")
     if last["l"]<=e20+a*.5 and last["c"]>=e20*.995 and last["c"]>last["o"]:f.append("pullback continuation")
     if last["c"]>max(x["h"] for x in b[-6:-1]) and last["v"]>=vol*1.10:f.append("momentum continuation")
@@ -107,7 +145,7 @@ def evaluate(m,sym,cfg,now):
     if c30[-1]<e50 or (c30[-1]<e20*.997 and m30[-1]["c"]<=m30[-1]["o"]):raise ValueError("timing:30m")
     book=m.get("/api/v3/ticker/bookTicker",symbol=sym); bid,ask=float(book["bidPrice"]),float(book["askPrice"]); price=(bid+ask)/2; opts=[]
     for tf,b in (("15m",m15),("30m",m30)):
-        names=setup_names(b)
+        names=setup_names(b,cfg)
         if not names:continue
         c=[x["c"] for x in b]; a=atr(b); mom=rsi(c); vol=b[-1]["v"]/max(statistics.mean(x["v"] for x in b[-21:-1]),1e-12)
         if not cfg["min_atr_pct"]<=a/price*100<=cfg["max_atr_pct"] or not 48<=mom<=76 or vol<cfg["min_volume_ratio"]:continue
@@ -125,6 +163,7 @@ def evaluate(m,sym,cfg,now):
             +5
             +5*min(lv["rr"]/2,1)
         )
+        if names[0].startswith("SMC:"): score=min(100,score+cfg.get("smc_score_bonus",4))
         if score<cfg["min_score"]:continue
         opts.append(dict(**lv,price=price,setup=names[0],timing=tf,score=score,rsi=mom,volume=vol))
     if not opts:raise ValueError("setup:no qualified timing")
