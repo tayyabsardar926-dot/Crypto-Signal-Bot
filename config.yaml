@@ -12,10 +12,8 @@ max_atr_pct: 3.5
 min_atr_pct: 0.12
 min_volume_ratio: 0.85
 max_3h_pump_pct: 8.0
-bearish_btc_extra_score: 4
 cooldown_hours: 8
 daily_cap: 5
-strong_market_cap: 6
 max_sector_per_day: 2
 max_setup_per_run: 3
 correlation_threshold: 0.90
