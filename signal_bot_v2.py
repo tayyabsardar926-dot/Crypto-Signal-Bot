@@ -38,15 +38,6 @@ def uptrend(b):
     c=[x["c"] for x in b]; e20,e50=ema(c,20),ema(c,50)
     return c[-1]>e20[-1]>e50[-1] and e20[-1]>e20[-4] and e50[-1]>=e50[-4]
 
-def downtrend(b):
-    c=[x["c"] for x in b]; e20,e50=ema(c,20),ema(c,50)
-    return c[-1]<e20[-1]<e50[-1] and e20[-1]<e20[-4] and e50[-1]<=e50[-4]
-
-def btc_regime(h4,h1):
-    if uptrend(h4) and uptrend(h1): return "strong uptrend"
-    if downtrend(h4) and downtrend(h1): return "strongly bearish"
-    return "neutral/choppy"
-
 def age_ok(first_ms,now,days): return 0<first_ms<=(now-days*86400)*1000
 
 class Market:
@@ -108,7 +99,7 @@ def levels(b,higher,price,cfg):
     tp2=valid[1] if len(valid)>1 else max(tp1+a*1.2,entry+risk*2.0)
     return dict(low=low,entry=entry,sl=sl,tp1=tp1,tp2=tp2,rr=rr)
 
-def evaluate(m,sym,cfg,btc,now):
+def evaluate(m,sym,cfg,now):
     h4,h1=m.bars(sym,"4h",now),m.bars(sym,"1h",now)
     if not uptrend(h4) or not uptrend(h1):raise ValueError("trend:4H+1H")
     if h1[-1]["c"]/h1[-4]["c"]-1>cfg["max_3h_pump_pct"]/100:raise ValueError("overextension:pump")
@@ -122,10 +113,20 @@ def evaluate(m,sym,cfg,btc,now):
         if not cfg["min_atr_pct"]<=a/price*100<=cfg["max_atr_pct"] or not 48<=mom<=76 or vol<cfg["min_volume_ratio"]:continue
         try: lv=levels(b,[h1,h4],price,cfg)
         except ValueError: continue
-        struct=1.0 if structure(b) else .55; btcw={"strong uptrend":1.0,"neutral/choppy":.65,"strongly bearish":.2}[btc]
-        score=round(20+10*struct+10*min(vol/1.35,1)+10*max(0,1-abs(mom-60)/24)+10+10+10*btcw+5+5+10*min(lv["rr"]/2,1)); need=cfg["min_score"]+(cfg["bearish_btc_extra_score"] if btc=="strongly bearish" and sym!="BTCUSDT" else 0)
-        if score<need or (btc=="strongly bearish" and sym!="BTCUSDT" and vol<1.0):continue
-        opts.append(dict(**lv,price=price,setup=names[0],timing=tf,score=score,rsi=mom,volume=vol,btc=btc))
+        struct=1.0 if structure(b) else .55
+        score=round(
+            20
+            +15*struct
+            +15*min(vol/1.35,1)
+            +15*max(0,1-abs(mom-60)/24)
+            +10
+            +10
+            +5
+            +5
+            +5*min(lv["rr"]/2,1)
+        )
+        if score<cfg["min_score"]:continue
+        opts.append(dict(**lv,price=price,setup=names[0],timing=tf,score=score,rsi=mom,volume=vol))
     if not opts:raise ValueError("setup:no qualified timing")
     return max(opts,key=lambda x:x["score"])
 
@@ -137,11 +138,11 @@ def telegram(msg):
 
 def fmt(s):
     e=s["entry"]; p=lambda x:f"{x:.8g}"
-    return (f"🟢 SPOT SIGNAL — {s['symbol']}\nCurrent: {p(s['price'])}\nBuy Zone: {p(s['low'])} – {p(e)} USDT\nTP1: {p(s['tp1'])} (+{(s['tp1']/e-1)*100:.2f}%)\nTP2: {p(s['tp2'])} (+{(s['tp2']/e-1)*100:.2f}%)\nSL/Invalidation: {p(s['sl'])} ({(1-s['sl']/e)*100:.2f}% risk)\nSetup: {s['setup']} | Score: {s['score']}/100\n4H+1H: Uptrend | Timing: {s['timing']} | RSI: {s['rsi']:.1f} | Volume: {s['volume']:.2f}x\nBTC regime: {s['btc']} (score modifier, not a hard gate)\nR:R to TP1: {s['rr']:.2f}\nUTC: {s['timestamp']}\nNo guaranteed outcome; fees/slippage excluded.")
+    return (f"🟢 SPOT SIGNAL — {s['symbol']}\nCurrent: {p(s['price'])}\nBuy Zone: {p(s['low'])} – {p(e)} USDT\nTP1: {p(s['tp1'])} (+{(s['tp1']/e-1)*100:.2f}%)\nTP2: {p(s['tp2'])} (+{(s['tp2']/e-1)*100:.2f}%)\nSL/Invalidation: {p(s['sl'])} ({(1-s['sl']/e)*100:.2f}% risk)\nSetup: {s['setup']} | Score: {s['score']}/100\n4H+1H: Uptrend | Timing: {s['timing']} | RSI: {s['rsi']:.1f} | Volume: {s['volume']:.2f}x\nR:R to TP1: {s['rr']:.2f}\nUTC: {s['timestamp']}\nNo guaranteed outcome; fees/slippage excluded.")
 
 def main():
     cfg=yaml.safe_load(Path("config.yaml").read_text()); assets=yaml.safe_load(Path("assets.yaml").read_text()); approved={k:v for k,v in assets.items() if isinstance(v,dict) and v.get("status")=="approved" and v.get("source")}; st=State(cfg["state_path"]); m=Market(cfg); now=m.get("/api/v3/time")["serverTime"]/1000
-    infos=m.get("/api/v3/exchangeInfo")["symbols"]; tick={x["symbol"]:x for x in m.get("/api/v3/ticker/24hr")}; books={x["symbol"]:x for x in m.get("/api/v3/ticker/bookTicker")}; btc=btc_regime(m.bars("BTCUSDT","4h",now),m.bars("BTCUSDT","1h",now)); counts=Counter(); candidates=[]; eligible=[x for x in infos if x.get("quoteAsset")=="USDT" and x.get("baseAsset") in approved]
+    infos=m.get("/api/v3/exchangeInfo")["symbols"]; tick={x["symbol"]:x for x in m.get("/api/v3/ticker/24hr")}; books={x["symbol"]:x for x in m.get("/api/v3/ticker/bookTicker")}; counts=Counter(); candidates=[]; eligible=[x for x in infos if x.get("quoteAsset")=="USDT" and x.get("baseAsset") in approved]
     for info in eligible:
         sym,base=info["symbol"],info["baseAsset"]
         try:
@@ -154,15 +155,15 @@ def main():
                 if not first:raise ValueError("age:missing")
                 st.d["ages"][sym]=int(first[0][0])
             if not age_ok(st.d["ages"][sym],now,cfg["min_age_days"]):raise ValueError("age:young")
-            s=evaluate(m,sym,cfg,btc,now); s.update(symbol=sym,sector=approved[base]["sector"],timestamp=datetime.fromtimestamp(now,timezone.utc).isoformat()); candidates.append(s)
+            s=evaluate(m,sym,cfg,now); s.update(symbol=sym,sector=approved[base]["sector"],timestamp=datetime.fromtimestamp(now,timezone.utc).isoformat()); candidates.append(s)
         except ValueError as e: counts[str(e).split(":")[0]]+=1
-    cap=cfg["strong_market_cap"] if btc=="strong uptrend" else cfg["daily_cap"]; sent=0
+    cap=cfg["daily_cap"]; sent=0
     for s in sorted(candidates,key=lambda x:x["score"],reverse=True):
         if sent>=cap:break
         why=st.blocked(s["symbol"],s["sector"],now,cfg,cap)
         if why: counts[why]+=1; continue
         telegram(fmt(s)); st.add(s,now); sent+=1
-    st.save(); print("SUMMARY",json.dumps({"btc":btc,"approved_assets":len(approved),"eligible_pairs":len(eligible),"qualified":len(candidates),"alerts":sent,"rejections":dict(counts)},sort_keys=True))
+    st.save(); print("SUMMARY",json.dumps({"approved_assets":len(approved),"eligible_pairs":len(eligible),"qualified":len(candidates),"alerts":sent,"rejections":dict(counts)},sort_keys=True))
 
 if __name__=="__main__":
     try: main()
