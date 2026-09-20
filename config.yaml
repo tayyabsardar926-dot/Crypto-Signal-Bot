@@ -1,0 +1,32 @@
+network:
+  timeout_seconds: 15
+
+filters:
+  # A Binance trading-history check is used as a conservative proxy for coin age.
+  # It can exclude an old coin that was listed on Binance recently, but it will not
+  # knowingly admit a coin with less than this much Binance history.
+  minimum_coin_age_years: 1.5
+
+  # Avoid thin markets and large spreads.
+  min_quote_volume_usdt_24h: 8000000
+  max_spread_bps: 20
+
+  # Trend score is 0..5. Requiring 4 keeps only strong 1H + 4H uptrends.
+  minimum_trend_score_1h: 4
+  minimum_trend_score_4h: 4
+
+  # Median high-to-low range of rolling 4-hour windows. This is only a volatility
+  # feasibility filter; it does NOT guarantee a 1% profit in the next 3-4 hours.
+  minimum_typical_4h_move_pct: 1.2
+
+  minimum_signal_score: 76
+  max_symbols_per_run: 40
+  reject_when_btc_bearish: true
+
+targets:
+  minimum_tp1_pct: 1.0
+  minimum_tp2_pct: 1.8
+
+alerts:
+  max_signals_per_run: 3
+  cooldown_hours_same_setup: 4
