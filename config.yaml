@@ -1,26 +1,42 @@
 base_url: https://data-api.binance.vision
 min_age_days: 548
 min_quote_volume: 5000000
-max_spread_pct: 0.20
-min_score: 72
-min_rr: 1.30
-max_stop_pct: 2.50
-min_stop_pct: 0.25
-min_target_pct: 1.0
-tp2_min_rr: 2.0
-max_atr_pct: 3.5
+max_spread_pct: 0.15
+
+# Quality / timing
+min_score: 76
+min_signal_rsi: 50
+max_signal_rsi: 72
+max_signal_rsi_drop: 2.0
+min_h1_rsi: 50
+max_h1_rsi: 72
+max_h1_rsi_drop: 2.5
+min_volume_ratio: 0.90
 min_atr_pct: 0.12
-min_volume_ratio: 0.85
-max_3h_pump_pct: 8.0
+max_atr_pct: 3.5
+max_3h_pump_pct: 7.0
+
+# Entry freshness: reject signals after price has already run away
+max_entry_extension_pct: 0.60
+max_entry_extension_atr: 0.70
+
+# Profit targets: this guarantees target room in the setup, NOT actual profit
+min_live_upside_pct: 1.0
+tp2_min_pct: 1.8
+max_tp2_h1_atr: 3.0
+runner_min_pct: 2.8
+runner_max_pct: 6.0
+runner_max_h1_atr: 4.0
+
+# SMC
 smc_enabled: true
 smc_min_gap_atr: 0.08
 smc_retest_atr_tolerance: 0.30
 smc_score_bonus: 4
-cooldown_hours: 8
-daily_cap: 5
+
+# Alert control
+cooldown_hours: 4
+daily_cap: 6
 max_sector_per_day: 2
-max_setup_per_run: 3
-correlation_threshold: 0.90
 request_interval: 0.15
-reject_log_samples: 12
 state_path: state/state.json
