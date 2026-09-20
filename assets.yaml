@@ -1,12 +1,28 @@
-# Purpose screening is provisional, not Shariah certification. Unknown assets rejected.
-# Review project changes before approving additions. Status must equal approved.
-BTC: {status: approved, sector: payments, notes: 'Decentralized peer-to-peer settlement; scholar review needed', source: 'https://bitcoin.org/en/bitcoin-paper'}
-LTC: {status: approved, sector: payments, notes: 'Peer-to-peer payment network; scholar review needed', source: 'https://litecoin.org/'}
-BCH: {status: approved, sector: payments, notes: 'Peer-to-peer cash network; scholar review needed', source: 'https://bitcoincash.org/'}
-XLM: {status: approved, sector: payments, notes: 'Payment and asset transfer infrastructure; scholar review needed', source: 'https://stellar.org/'}
-FIL: {status: approved, sector: storage, notes: 'Decentralized file storage; scholar review needed', source: 'https://filecoin.io/'}
-AR: {status: approved, sector: storage, notes: 'Permanent data storage; scholar review needed', source: 'https://arweave.org/'}
-ETH: {status: review, sector: infrastructure, notes: 'Mixed ecosystem and staking questions; disabled pending review'}
-SOL: {status: review, sector: infrastructure, notes: 'Mixed ecosystem; disabled pending review'}
+# Conservative PURPOSE screening only — NOT Shariah certification or a fatwa.
+# Primary project purpose is screened. Tokenomics, staking, secondary apps, later changes and trading method still need scholar review.
+# Runtime also requires >=548 days of Binance spot history before any signal is allowed.
+BTC: {status: approved, sector: payments, notes: 'Peer-to-peer settlement; purpose screen only', source: 'https://bitcoin.org/en/bitcoin-paper'}
+LTC: {status: approved, sector: payments, notes: 'Peer-to-peer payments; purpose screen only', source: 'https://litecoin.org/'}
+BCH: {status: approved, sector: payments, notes: 'Peer-to-peer cash network; purpose screen only', source: 'https://bitcoincash.org/'}
+XLM: {status: approved, sector: payments, notes: 'Payment and asset-transfer infrastructure; purpose screen only', source: 'https://stellar.org/'}
+XRP: {status: approved, sector: payments, notes: 'Payment/settlement infrastructure; purpose screen only', source: 'https://xrpl.org/'}
+FIL: {status: approved, sector: storage, notes: 'Decentralized file storage; purpose screen only', source: 'https://filecoin.io/'}
+AR: {status: approved, sector: storage, notes: 'Permanent data storage; purpose screen only', source: 'https://arweave.org/'}
+LINK: {status: approved, sector: oracle, notes: 'Oracle/data infrastructure; purpose screen only', source: 'https://chain.link/'}
+GRT: {status: approved, sector: data, notes: 'Blockchain data indexing/query infrastructure; purpose screen only', source: 'https://thegraph.com/'}
+HBAR: {status: approved, sector: infrastructure, notes: 'Distributed-ledger infrastructure; purpose screen only', source: 'https://hedera.com/'}
+ALGO: {status: approved, sector: infrastructure, notes: 'General-purpose blockchain infrastructure; purpose screen only', source: 'https://algorand.co/'}
+ADA: {status: approved, sector: infrastructure, notes: 'General-purpose blockchain infrastructure; purpose screen only', source: 'https://cardano.org/'}
+DOT: {status: approved, sector: infrastructure, notes: 'Interoperability blockchain infrastructure; purpose screen only', source: 'https://polkadot.com/'}
+ATOM: {status: approved, sector: infrastructure, notes: 'Interoperability blockchain infrastructure; purpose screen only', source: 'https://cosmos.network/'}
+NEAR: {status: approved, sector: infrastructure, notes: 'General-purpose blockchain infrastructure; purpose screen only', source: 'https://near.org/'}
+ICP: {status: approved, sector: compute, notes: 'Decentralized compute/network infrastructure; purpose screen only', source: 'https://internetcomputer.org/'}
+VET: {status: approved, sector: supply-chain, notes: 'Supply-chain/business data infrastructure; purpose screen only', source: 'https://www.vechain.org/'}
+THETA: {status: approved, sector: media-infrastructure, notes: 'Decentralized media-delivery infrastructure; purpose screen only', source: 'https://www.thetatoken.org/'}
+IOTA: {status: approved, sector: infrastructure, notes: 'Distributed-ledger/data infrastructure; purpose screen only', source: 'https://www.iota.org/'}
+XTZ: {status: approved, sector: infrastructure, notes: 'General-purpose blockchain infrastructure; purpose screen only', source: 'https://tezos.com/'}
+ETC: {status: approved, sector: infrastructure, notes: 'General-purpose smart-contract infrastructure; purpose screen only', source: 'https://ethereumclassic.org/'}
+ETH: {status: approved, sector: infrastructure, notes: 'General-purpose smart-contract infrastructure; purpose screen only; staking/secondary apps not assessed', source: 'https://ethereum.org/'}
+SOL: {status: approved, sector: infrastructure, notes: 'General-purpose blockchain infrastructure; purpose screen only; staking/secondary apps not assessed', source: 'https://solana.com/'}
 AAVE: {status: rejected, sector: lending, notes: 'Lending-focused'}
-MKR: {status: rejected, sector: lending, notes: 'Credit and lending exposure'}
+MKR: {status: rejected, sector: lending, notes: 'Credit/lending exposure'}
