@@ -1,39 +1,12 @@
-# PURPOSE-SCREENED CANDIDATE LIST — NOT A SHARIAH FATWA.
-# These are mainly payment, base-layer, infrastructure, storage, data/oracle,
-# compute or interoperability projects. The bot only scans assets listed here.
-# Add/remove assets only after reviewing the project's current primary use-case.
-# Separate lending/interest, gambling/betting, leveraged tokens and unclear
-# projects are intentionally not auto-discovered.
-
-assets:
-  - {symbol: BTC, enabled: true, purpose_category: "payment / monetary network", note: "Bitcoin base network"}
-  - {symbol: ETH, enabled: true, purpose_category: "smart-contract infrastructure", note: "General-purpose base network"}
-  - {symbol: XRP, enabled: true, purpose_category: "payments / settlement", note: "Payments-focused network"}
-  - {symbol: ADA, enabled: true, purpose_category: "smart-contract infrastructure", note: "General-purpose base network"}
-  - {symbol: SOL, enabled: true, purpose_category: "smart-contract infrastructure", note: "General-purpose base network"}
-  - {symbol: DOT, enabled: true, purpose_category: "interoperability infrastructure", note: "Multi-chain infrastructure"}
-  - {symbol: LINK, enabled: true, purpose_category: "oracle / data infrastructure", note: "Oracle network utility"}
-  - {symbol: LTC, enabled: true, purpose_category: "payments", note: "Payment network"}
-  - {symbol: BCH, enabled: true, purpose_category: "payments", note: "Payment network"}
-  - {symbol: XLM, enabled: true, purpose_category: "payments / settlement", note: "Payments-focused network"}
-  - {symbol: AVAX, enabled: true, purpose_category: "smart-contract infrastructure", note: "General-purpose base network"}
-  - {symbol: ATOM, enabled: true, purpose_category: "interoperability infrastructure", note: "Interchain infrastructure"}
-  - {symbol: ALGO, enabled: true, purpose_category: "distributed-ledger infrastructure", note: "General-purpose network"}
-  - {symbol: FIL, enabled: true, purpose_category: "decentralized storage", note: "Storage network"}
-  - {symbol: ICP, enabled: true, purpose_category: "decentralized compute", note: "Compute/application network"}
-  - {symbol: HBAR, enabled: true, purpose_category: "distributed-ledger infrastructure", note: "General-purpose network"}
-  - {symbol: EGLD, enabled: true, purpose_category: "smart-contract infrastructure", note: "General-purpose base network"}
-  - {symbol: NEAR, enabled: true, purpose_category: "smart-contract infrastructure", note: "General-purpose base network"}
-  - {symbol: ETC, enabled: true, purpose_category: "smart-contract infrastructure", note: "General-purpose base network"}
-  - {symbol: VET, enabled: true, purpose_category: "supply-chain / data infrastructure", note: "Enterprise/data network"}
-  - {symbol: THETA, enabled: true, purpose_category: "decentralized media infrastructure", note: "Video/edge infrastructure"}
-  - {symbol: GRT, enabled: true, purpose_category: "blockchain data indexing", note: "Indexing/query infrastructure"}
-  - {symbol: AR, enabled: true, purpose_category: "decentralized storage", note: "Permanent-data storage network"}
-  - {symbol: IOTA, enabled: true, purpose_category: "distributed-ledger / IoT infrastructure", note: "Data/value-transfer network"}
-  - {symbol: FLOW, enabled: true, purpose_category: "smart-contract infrastructure", note: "Application blockchain"}
-  - {symbol: QNT, enabled: true, purpose_category: "interoperability infrastructure", note: "Enterprise interoperability"}
-  - {symbol: APT, enabled: true, purpose_category: "smart-contract infrastructure", note: "General-purpose base network"}
-  - {symbol: SUI, enabled: true, purpose_category: "smart-contract infrastructure", note: "General-purpose base network"}
-  - {symbol: TON, enabled: true, purpose_category: "network / payments infrastructure", note: "General-purpose network"}
-  - {symbol: KAS, enabled: true, purpose_category: "payment / proof-of-work network", note: "Base network"}
-  - {symbol: RENDER, enabled: true, purpose_category: "distributed compute / rendering", note: "GPU rendering network"}
+# Purpose screening is provisional, not Shariah certification. Unknown assets rejected.
+# Review project changes before approving additions. Status must equal approved.
+BTC: {status: approved, sector: payments, notes: 'Decentralized peer-to-peer settlement; scholar review needed', source: 'https://bitcoin.org/en/bitcoin-paper'}
+LTC: {status: approved, sector: payments, notes: 'Peer-to-peer payment network; scholar review needed', source: 'https://litecoin.org/'}
+BCH: {status: approved, sector: payments, notes: 'Peer-to-peer cash network; scholar review needed', source: 'https://bitcoincash.org/'}
+XLM: {status: approved, sector: payments, notes: 'Payment and asset transfer infrastructure; scholar review needed', source: 'https://stellar.org/'}
+FIL: {status: approved, sector: storage, notes: 'Decentralized file storage; scholar review needed', source: 'https://filecoin.io/'}
+AR: {status: approved, sector: storage, notes: 'Permanent data storage; scholar review needed', source: 'https://arweave.org/'}
+ETH: {status: review, sector: infrastructure, notes: 'Mixed ecosystem and staking questions; disabled pending review'}
+SOL: {status: review, sector: infrastructure, notes: 'Mixed ecosystem; disabled pending review'}
+AAVE: {status: rejected, sector: lending, notes: 'Lending-focused'}
+MKR: {status: rejected, sector: lending, notes: 'Credit and lending exposure'}

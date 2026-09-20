@@ -1,546 +1,410 @@
-from __future__ import annotations
-
+"""Conservative public-data spot scanner. No exchange credentials or order methods."""
+import argparse
+from collections import Counter
+from datetime import datetime, timezone
 import json
 import math
 import os
-import time
-from dataclasses import dataclass, asdict
-from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+import statistics
+import subprocess
+import time
 
-import numpy as np
-import pandas as pd
 import requests
 import yaml
 
-ROOT = Path(__file__).resolve().parent
-CONFIG_PATH = ROOT / "config.yaml"
-ASSETS_PATH = ROOT / "assets.yaml"
-STATE_PATH = ROOT / "signal_state.json"
+
+def ema(values, n):
+    if len(values) < n:
+        raise ValueError('Insufficient EMA history')
+    out = [sum(values[:n]) / n]
+    for v in values[n:]:
+        out.append(out[-1] + 2 / (n + 1) * (v - out[-1]))
+    return out
 
 
-@dataclass
-class Signal:
-    symbol: str
-    strategy: str
-    score: float
-    current_price: float
-    buy_low: float
-    buy_high: float
-    tp1: float
-    tp2: float
-    stop: float
-    tp1_pct: float
-    tp2_pct: float
-    risk_pct: float
-    move_potential_pct: float
-    rsi_1h: float
-    rsi_4h: float
-    trend_1h: int
-    trend_4h: int
-    quote_volume_24h: float
-    spread_bps: float
-    purpose_category: str
-    market_regime: str
-    note: str
+def rsi(values, n=14):
+    if len(values) <= n:
+        raise ValueError('Insufficient RSI history')
+    changes = [b-a for a, b in zip(values, values[1:])]
+    gain = sum(max(x, 0) for x in changes[:n]) / n
+    loss = sum(max(-x, 0) for x in changes[:n]) / n
+    for x in changes[n:]:
+        gain = (gain*(n-1)+max(x, 0))/n
+        loss = (loss*(n-1)+max(-x, 0))/n
+    return 50.0 if gain == loss == 0 else 100.0 if loss == 0 else 100-100/(1+gain/loss)
 
 
-class BinancePublicClient:
-    """Public market-data only. No exchange API key or trading permission is used."""
+def atr(bars, n=14):
+    tr = [max(b['h']-b['l'], abs(b['h']-a['c']), abs(b['l']-a['c'])) for a, b in zip(bars, bars[1:])]
+    if len(tr) < n:
+        raise ValueError('Insufficient ATR history')
+    value = sum(tr[:n])/n
+    for x in tr[n:]:
+        value = (value*(n-1)+x)/n
+    return value
 
-    BASES = [
-        "https://data-api.binance.vision",
-        "https://api.binance.com",
-        "https://api1.binance.com",
-    ]
 
-    def __init__(self, timeout: int = 15):
-        self.timeout = timeout
-        self.session = requests.Session()
-        self.session.headers.update({"User-Agent": "FreeCryptoSignalScanner/1.0"})
+def pivots(bars, key):
+    test = max if key == 'h' else min
+    return [bars[i][key] for i in range(2, len(bars)-2)
+            if bars[i][key] == test(b[key] for b in bars[i-2:i+3])
+            and bars[i][key] != bars[i-1][key]]
 
-    def get(self, path: str, params: Optional[dict] = None):
-        last_err = None
-        for base in self.BASES:
+
+def structure(bars):
+    highs, lows = pivots(bars[-80:], 'h'), pivots(bars[-80:], 'l')
+    return len(highs) >= 2 and len(lows) >= 2 and highs[-1] > highs[-2] and lows[-1] > lows[-2]
+
+
+def trend(bars):
+    c = [b['c'] for b in bars]
+    e20, e50 = ema(c, 20), ema(c, 50)
+    return c[-1] > e20[-1] > e50[-1] and e20[-1] > e20[-4] and e50[-1] > e50[-4] and structure(bars)
+
+
+def age_ok(first_ms, now, minimum):
+    return 0 < first_ms <= (now-minimum*86400)*1000
+
+
+def liquid(info, ticker, book, cfg):
+    if info.get('status') != 'TRADING' or info.get('quoteAsset') != 'USDT' or not info.get('isSpotTradingAllowed', False):
+        return False
+    bid, ask = float(book.get('bidPrice', 0)), float(book.get('askPrice', 0))
+    return (0 < bid <= ask and float(ticker.get('quoteVolume', 0)) >= cfg['min_quote_volume']
+            and (ask-bid)/((ask+bid)/2)*100 <= cfg['max_spread_pct'])
+
+
+def setups(bars):
+    c = [b['c'] for b in bars]
+    a, last, prev = atr(bars), bars[-1], bars[-2]
+    e = ema(c, 20)[-1]
+    resistance = max(b['h'] for b in bars[-22:-2])
+    supports = pivots(bars[:-1], 'l')
+    found = []
+    if prev['c'] > resistance and last['l'] <= resistance+a*.3 and last['c'] > resistance:
+        found.append('breakout-retest')
+    if last['l'] <= e+a*.3 and last['c'] > e and last['c'] > last['o']:
+        found.append('pullback continuation')
+    if last['c'] > max(b['h'] for b in bars[-6:-1]) and last['v'] > statistics.mean(b['v'] for b in bars[-21:-1])*1.3:
+        found.append('momentum continuation')
+    if supports and abs(last['l']-supports[-1]) <= a*.4 and last['c'] > last['o'] and last['c']-last['l'] > a*.5:
+        found.append('support bounce')
+    if structure(bars) and c[-1] > c[-2] > c[-3] and c[-1] > e:
+        found.append('trend continuation')
+    return found
+
+
+def levels(bars, higher, price, cfg):
+    a = atr(bars)
+    supports = [x for x in pivots(bars[-80:], 'l') if x < price]
+    if not supports:
+        raise ValueError('levels:no confirmed support')
+    support = max(supports)
+    anchor = max(support, min(ema([b['c'] for b in bars], 20)[-1], price))
+    low, entry = anchor-a*.1, min(price, anchor+a*.25)
+    if not 0 < low <= entry or price-entry > a*.75:
+        raise ValueError('levels:entry too far from market')
+    stop = support-a*.25
+    risk = entry-stop
+    if risk <= 0 or not cfg['min_stop_pct'] <= risk/entry*100 <= cfg['max_stop_pct']:
+        raise ValueError('levels:stop distance')
+    resistance = sorted(set(x for series in (bars, *higher) for x in pivots(series, 'h') if x > entry))
+    if len(resistance) < 2:
+        raise ValueError('levels:two confirmed resistances unavailable')
+    tp1, tp2 = resistance[0]-a*.1, resistance[1]-a*.1
+    if tp1 <= price or tp2 <= tp1 or (tp1-entry)/entry*100 < cfg['min_target_pct']:
+        raise ValueError('levels:insufficient upside before resistance')
+    if (tp1-entry)/risk < cfg['min_rr']:
+        raise ValueError('levels:R:R')
+    # Four 1H ATRs is a feasibility ceiling, not a time or profit prediction.
+    if tp1-entry > atr(higher[0])*4:
+        raise ValueError('levels:target beyond near-term volatility budget')
+    return dict(low=low, entry=entry, sl=stop, tp1=tp1, tp2=tp2, rr=(tp1-entry)/risk)
+
+
+def score(features):
+    weights = dict(trend=20, structure=10, volume=10, momentum=10, volatility=10,
+                   liquidity=10, btc=10, extension=5, resistance=5, rr=10)
+    return round(sum(weights[k]*max(0, min(1, features.get(k, 0))) for k in weights))
+
+
+def correlation(a, b):
+    n = min(len(a), len(b), 48)
+    if n < 20:
+        return 1.0  # Unknown correlation: conservative suppression.
+    x, y = a[-n:], b[-n:]
+    mx, my = statistics.mean(x), statistics.mean(y)
+    denom = math.sqrt(sum((v-mx)**2 for v in x)*sum((v-my)**2 for v in y))
+    return sum((u-mx)*(v-my) for u, v in zip(x, y))/denom if denom else 1.0
+
+
+class State:
+    def __init__(self, path):
+        self.path = Path(path)
+        self.data = json.loads(self.path.read_text()) if self.path.exists() else {'version': 1, 'alerts': [], 'ages': {}}
+        if self.data.get('version') != 1 or not isinstance(self.data.get('alerts'), list) or not isinstance(self.data.get('ages'), dict):
+            raise ValueError('Invalid state: restore valid state; refusing reset')
+        for alert in self.data['alerts']:
+            if not isinstance(alert.get('symbol'), str) or not isinstance(alert.get('sector'), str) or not isinstance(alert.get('time'), (int, float)) or not math.isfinite(alert['time']) or alert['time'] <= 0:
+                raise ValueError('Invalid alert state')
+        if any(not isinstance(v, int) or v <= 0 for v in self.data['ages'].values()):
+            raise ValueError('Invalid age state')
+
+    def save(self):
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = self.path.with_suffix('.tmp')
+        tmp.write_text(json.dumps(self.data, indent=2), encoding='utf-8')
+        tmp.replace(self.path)
+
+    def allowed(self, symbol, sector, now, cfg, cap):
+        today = datetime.fromtimestamp(now, timezone.utc).date()
+        daily = [x for x in self.data['alerts'] if datetime.fromtimestamp(x['time'], timezone.utc).date() == today]
+        if len(daily) >= cap:
+            return 'daily cap'
+        if any(x['symbol'] == symbol and now-x['time'] < cfg['cooldown_hours']*3600 for x in self.data['alerts']):
+            return 'cooldown'
+        if sum(x['sector'] == sector for x in daily) >= cfg['max_sector_per_day']:
+            return 'sector daily cap'
+        return None
+
+    def reserve(self, signal, now):
+        self.data['alerts'] = [x for x in self.data['alerts'] if now-x['time'] < 30*86400]
+        self.data['alerts'].append(dict(symbol=signal['symbol'], sector=signal['sector'], time=now, status='reserved'))
+        self.save()
+
+
+class Market:
+    def __init__(self, cfg):
+        self.cfg, self.session, self.cache = cfg, requests.Session(), {}
+
+    def get(self, endpoint, **params):
+        key = (endpoint, tuple(sorted(params.items())))
+        if key in self.cache:
+            return self.cache[key]
+        for attempt in range(4):
+            time.sleep(self.cfg['request_interval'])
             try:
-                r = self.session.get(base + path, params=params, timeout=self.timeout)
-                if r.status_code == 429:
-                    time.sleep(2)
-                    last_err = RuntimeError(f"Binance rate limit on {base}")
+                r = self.session.get(self.cfg['base_url']+endpoint, params=params, timeout=(10, 25))
+                if r.status_code in (418, 451):
+                    raise RuntimeError('Binance access unavailable; no signals')
+                if r.status_code == 429 or r.status_code >= 500:
+                    delay = min(float(r.headers.get('Retry-After', 2**(attempt+1))), 120)
+                    time.sleep(delay)
                     continue
                 r.raise_for_status()
-                return r.json()
-            except Exception as exc:
-                last_err = exc
-        raise RuntimeError(f"Binance public data request failed: {last_err}")
+                result = r.json()
+                self.cache[key] = result
+                if int(r.headers.get('X-MBX-USED-WEIGHT-1M', 0)) > 4000:
+                    time.sleep(60)
+                return result
+            except (requests.RequestException, ValueError):
+                time.sleep(2**attempt)
+        raise RuntimeError('Market data unavailable after retries')
 
-    def exchange_info(self) -> dict:
-        return self.get("/api/v3/exchangeInfo")
-
-    def ticker_24h(self) -> list:
-        return self.get("/api/v3/ticker/24hr")
-
-    def book_ticker(self) -> list:
-        return self.get("/api/v3/ticker/bookTicker")
-
-    def klines(self, symbol: str, interval: str, limit: int = 300, start_time: Optional[int] = None) -> list:
-        params = {"symbol": symbol, "interval": interval, "limit": limit}
-        if start_time is not None:
-            params["startTime"] = start_time
-        return self.get("/api/v3/klines", params=params)
-
-
-def load_yaml(path: Path) -> dict:
-    with open(path, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f)
+    def bars(self, symbol, interval, now):
+        rows = self.get('/api/v3/klines', symbol=symbol, interval=interval, limit=250)
+        seconds = {'15m': 900, '30m': 1800, '1h': 3600, '4h': 14400}[interval]
+        closed = [r for r in rows if int(r[6]) < now*1000]
+        if len(closed) < 200 or now*1000-int(closed[-1][6]) > seconds*1000+120000:
+            raise ValueError('stale/insufficient candles')
+        if any(int(b[0])-int(a[0]) != seconds*1000 for a, b in zip(closed, closed[1:])):
+            raise ValueError('gapped candles')
+        bars = [dict(o=float(r[1]), h=float(r[2]), l=float(r[3]), c=float(r[4]), v=float(r[5])) for r in closed]
+        if any(not all(math.isfinite(v) for v in b.values()) or not 0 < b['l'] <= min(b['o'], b['c']) <= max(b['o'], b['c']) <= b['h'] or b['v'] < 0 for b in bars):
+            raise ValueError('invalid candles')
+        return bars
 
 
-def klines_to_df(rows: list) -> pd.DataFrame:
-    cols = [
-        "open_time", "open", "high", "low", "close", "volume", "close_time",
-        "quote_volume", "trades", "taker_buy_base", "taker_buy_quote", "ignore"
-    ]
-    df = pd.DataFrame(rows, columns=cols)
-    numeric = ["open", "high", "low", "close", "volume", "quote_volume"]
-    df[numeric] = df[numeric].astype(float)
-    df["open_time"] = pd.to_datetime(df["open_time"], unit="ms", utc=True)
-    return df
-
-
-def ema(s: pd.Series, span: int) -> pd.Series:
-    return s.ewm(span=span, adjust=False).mean()
-
-
-def rsi(close: pd.Series, period: int = 14) -> pd.Series:
-    delta = close.diff()
-    gain = delta.clip(lower=0)
-    loss = -delta.clip(upper=0)
-    avg_gain = gain.ewm(alpha=1 / period, adjust=False, min_periods=period).mean()
-    avg_loss = loss.ewm(alpha=1 / period, adjust=False, min_periods=period).mean()
-    rs = avg_gain / avg_loss.replace(0, np.nan)
-    out = 100 - (100 / (1 + rs))
-    out = out.where(~((avg_loss == 0) & (avg_gain > 0)), 100.0)
-    out = out.where(~((avg_gain == 0) & (avg_loss > 0)), 0.0)
-    out = out.where(~((avg_gain == 0) & (avg_loss == 0)), 50.0)
-    return out.fillna(50)
-
-
-def atr(df: pd.DataFrame, period: int = 14) -> pd.Series:
-    prev_close = df["close"].shift(1)
-    tr = pd.concat([
-        df["high"] - df["low"],
-        (df["high"] - prev_close).abs(),
-        (df["low"] - prev_close).abs(),
-    ], axis=1).max(axis=1)
-    return tr.ewm(alpha=1 / period, adjust=False, min_periods=period).mean()
-
-
-def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
-    d = df.copy()
-    d["ema20"] = ema(d["close"], 20)
-    d["ema50"] = ema(d["close"], 50)
-    d["ema200"] = ema(d["close"], 200)
-    d["rsi"] = rsi(d["close"], 14)
-    d["atr"] = atr(d, 14)
-    d["vol_ma20"] = d["volume"].rolling(20).mean()
-    d["vol_ratio"] = d["volume"] / d["vol_ma20"].replace(0, np.nan)
-    d["macd"] = ema(d["close"], 12) - ema(d["close"], 26)
-    d["macd_signal"] = ema(d["macd"], 9)
-    d["macd_hist"] = d["macd"] - d["macd_signal"]
-
-    # Internal smoothed Heikin-Ashi approximation. This is NOT claimed to be
-    # identical to any proprietary TradingView "Smooth Ashi Candles v1" script.
-    so = ema(d["open"], 5)
-    sh = ema(d["high"], 5)
-    sl = ema(d["low"], 5)
-    sc = ema(d["close"], 5)
-    ha_close = (so + sh + sl + sc) / 4
-    ha_open = ha_close.copy()
-    ha_open.iloc[0] = (so.iloc[0] + sc.iloc[0]) / 2
-    for i in range(1, len(d)):
-        ha_open.iloc[i] = (ha_open.iloc[i - 1] + ha_close.iloc[i - 1]) / 2
-    d["sha_open"] = ema(ha_open, 3)
-    d["sha_close"] = ema(ha_close, 3)
-    d["sha_green"] = d["sha_close"] > d["sha_open"]
-    return d
-
-
-def structure_up(df: pd.DataFrame, window: int = 12) -> bool:
-    if len(df) < window * 2 + 1:
-        return False
-    a = df.iloc[-2 * window:-window]
-    b = df.iloc[-window:]
-    return (b["high"].max() > a["high"].max()) and (b["low"].min() >= a["low"].min() * 0.995)
-
-
-def trend_score(df: pd.DataFrame) -> int:
-    x = df.iloc[-1]
-    score = 0
-    score += int(x["close"] > x["ema20"] > x["ema50"])
-    score += int(x["ema20"] > df["ema20"].iloc[-5])
-    score += int(x["rsi"] >= 50)
-    score += int(structure_up(df))
-    score += int(bool(x["sha_green"]))
-    return score
-
-
-def rolling_4h_move_potential(df_1h: pd.DataFrame) -> float:
-    if len(df_1h) < 40:
-        return 0.0
-    highs = df_1h["high"].rolling(4).max()
-    lows = df_1h["low"].rolling(4).min()
-    ranges = (highs / lows - 1.0) * 100
-    recent = ranges.dropna().iloc[-30:]
-    return float(recent.median()) if not recent.empty else 0.0
-
-
-def strategy_breakout(d: pd.DataFrame) -> Tuple[float, str]:
-    x = d.iloc[-1]
-    resistance = d["high"].iloc[-21:-1].max()
-    cond = x["close"] > resistance and x["vol_ratio"] >= 1.15 and 54 <= x["rsi"] <= 74 and x["sha_green"]
-    if not cond:
-        return 0.0, ""
-    score = 25 + min(8, (x["vol_ratio"] - 1) * 10)
-    return score, "Breakout + volume confirmation"
-
-
-def strategy_pullback(d: pd.DataFrame) -> Tuple[float, str]:
-    x = d.iloc[-1]
-    distance_atr = abs(x["close"] - x["ema20"]) / max(x["atr"], 1e-12)
-    bullish_candle = x["close"] > x["open"]
-    cond = distance_atr <= 0.65 and bullish_candle and 47 <= x["rsi"] <= 66 and x["sha_green"]
-    if not cond:
-        return 0.0, ""
-    return 28 + max(0, 4 - distance_atr * 4), "EMA20 pullback continuation"
-
-
-def strategy_momentum(d: pd.DataFrame) -> Tuple[float, str]:
-    x, p = d.iloc[-1], d.iloc[-2]
-    rsi_cross = p["rsi"] <= 55 < x["rsi"] or (x["rsi"] >= 55 and x["rsi"] > p["rsi"])
-    macd_ok = x["macd_hist"] > 0 and x["macd_hist"] >= p["macd_hist"]
-    cond = rsi_cross and macd_ok and x["sha_green"] and x["vol_ratio"] >= 0.95 and x["rsi"] <= 72
-    if not cond:
-        return 0.0, ""
-    return 27 + min(5, max(0, x["rsi"] - 55) * 0.4), "Momentum continuation"
-
-
-def strategy_support_bounce(d: pd.DataFrame) -> Tuple[float, str]:
-    x, p = d.iloc[-1], d.iloc[-2]
-    support = d["low"].iloc[-25:-1].min()
-    near_support = (x["close"] - support) <= max(1.1 * x["atr"], x["close"] * 0.008)
-    reversal = x["close"] > x["open"] and x["close"] > p["close"] and x["rsi"] > p["rsi"] and x["sha_green"]
-    if not (near_support and reversal and x["rsi"] >= 45):
-        return 0.0, ""
-    return 25.0, "Support bounce + bullish reversal"
-
-
-def choose_strategy(d1h: pd.DataFrame) -> Tuple[float, str]:
-    candidates = [
-        strategy_breakout(d1h),
-        strategy_pullback(d1h),
-        strategy_momentum(d1h),
-        strategy_support_bounce(d1h),
-    ]
-    return max(candidates, key=lambda x: x[0])
-
-
-def price_levels(d1h: pd.DataFrame, min_tp1_pct: float, min_tp2_pct: float) -> Optional[dict]:
-    x = d1h.iloc[-1]
-    entry = float(x["close"])
-    a = float(x["atr"])
-    if not math.isfinite(a) or a <= 0:
-        return None
-
-    buy_low = entry - 0.15 * a
-    buy_high = entry + 0.08 * a
-    recent_swing_low = float(d1h["low"].iloc[-12:].min())
-    # Use the tighter of an ATR-based volatility stop and the latest swing area.
-    # This is a risk stop, not a guarantee that price cannot move through it.
-    stop = max(entry - 1.15 * a, recent_swing_low - 0.10 * a)
-    risk_pct = (entry - stop) / entry * 100
-    # Avoid stops that are unrealistically tight or too wide for a short-term setup.
-    if risk_pct < 0.45:
-        stop = entry * (1 - 0.0045)
-        risk_pct = 0.45
-    if risk_pct > 2.5:
-        return None
-
-    tp1 = entry * (1 + min_tp1_pct / 100)
-    tp2 = entry * (1 + min_tp2_pct / 100)
-    # Let ATR expand targets when volatility supports it.
-    tp1 = max(tp1, entry + 1.05 * a)
-    tp2 = max(tp2, entry + 1.90 * a)
-
-    tp1_pct = (tp1 / entry - 1) * 100
-    tp2_pct = (tp2 / entry - 1) * 100
-    rr1 = (tp1 - entry) / max(entry - stop, 1e-12)
-    if rr1 < 0.75:
-        return None
-
-    return {
-        "current_price": entry,
-        "buy_low": buy_low,
-        "buy_high": buy_high,
-        "tp1": tp1,
-        "tp2": tp2,
-        "stop": stop,
-        "tp1_pct": tp1_pct,
-        "tp2_pct": tp2_pct,
-        "risk_pct": risk_pct,
-    }
-
-
-def fmt_price(x: float) -> str:
-    if x >= 1000:
-        return f"{x:,.2f}"
-    if x >= 1:
-        return f"{x:.4f}".rstrip("0").rstrip(".")
-    if x >= 0.01:
-        return f"{x:.6f}".rstrip("0").rstrip(".")
-    return f"{x:.8f}".rstrip("0").rstrip(".")
-
-
-def load_state() -> dict:
-    if not STATE_PATH.exists():
-        return {}
+def telegram(message):
+    token, chat = os.environ.get('TELEGRAM_BOT_TOKEN'), os.environ.get('TELEGRAM_CHAT_ID')
+    if not token or not chat:
+        raise RuntimeError('Required Telegram secrets missing')
+    # No blind POST retry: timeout may mean Telegram already accepted the alert.
     try:
-        return json.loads(STATE_PATH.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
+        response = requests.post('https://api.telegram.org/bot'+token+'/sendMessage',
+                                 json={'chat_id': chat, 'text': message}, timeout=(10, 25))
+        if response.status_code != 200 or not response.json().get('ok'):
+            raise RuntimeError('Telegram rejected message; reservation retained')
+    except (requests.RequestException, ValueError):
+        raise RuntimeError('Telegram delivery uncertain; reservation retained') from None
 
 
-def save_state(state: dict):
-    STATE_PATH.write_text(json.dumps(state, indent=2), encoding="utf-8")
+def format_signal(s):
+    p = lambda x: f'{x:.8g}'
+    e = s['entry']
+    return (f"SPOT WATCH — {s['symbol']}\nCurrent Price: {p(s['price'])}\n"
+            f"Buy Zone: {p(s['low'])} – {p(e)} USDT\n"
+            f"TP1: {p(s['tp1'])} (+{(s['tp1']/e-1)*100:.2f}%)\n"
+            f"TP2: {p(s['tp2'])} (+{(s['tp2']/e-1)*100:.2f}%)\n"
+            f"SL / technical invalidation: {p(s['sl'])} (risk {(1-s['sl']/e)*100:.2f}%)\n"
+            f"Setup: {s['setup']}\nScore: {s['score']}/100\nRisk: elevated (crypto spot)\n"
+            f"4H: EMA20 > EMA50, rising, HH/HL\n1H: EMA20 > EMA50, rising, HH/HL\n"
+            f"Timing: {s['timing']} setup; 30m EMA alignment\nRSI: {s['rsi']:.1f}\n"
+            f"Volume: {s['volume']:.2f}x prior 20 bars\nBTC: {s['btc']}\n"
+            f"Passed: trend, confirmed resistance room, liquidity, purpose proxy, R:R {s['rr']:.2f}\n"
+            f"UTC: {s['timestamp']}\nPercentages use upper entry; fees/slippage excluded. "
+            'Watch zone for next 60 minutes; skip if invalidated or price runs away. No guaranteed outcome.')
 
 
-def can_alert(symbol: str, strategy: str, cooldown_hours: float, state: dict) -> bool:
-    key = f"{symbol}:{strategy}"
-    last = state.get(key)
-    if not last:
-        return True
-    try:
-        t = datetime.fromisoformat(last)
-        if t.tzinfo is None:
-            t = t.replace(tzinfo=timezone.utc)
-        return datetime.now(timezone.utc) - t >= timedelta(hours=cooldown_hours)
-    except Exception:
-        return True
+def persist_remote():
+    if os.environ.get('PERSIST_STATE_COMMAND') == 'github':
+        subprocess.run(['bash', 'scripts/persist_state.sh'], check=True)
 
 
-def mark_alert(symbol: str, strategy: str, state: dict):
-    state[f"{symbol}:{strategy}"] = datetime.now(timezone.utc).isoformat()
-
-
-def telegram_send(token: str, chat_id: str, text: str):
-    url = f"https://api.telegram.org/bot{token}/sendMessage"
-    r = requests.post(url, json={"chat_id": chat_id, "text": text}, timeout=20)
-    r.raise_for_status()
-
-
-def signal_message(s: Signal) -> str:
-    return (
-        "🟢 SPOT BUY SETUP\n"
-        f"Coin: {s.symbol}\n"
-        f"Current: {fmt_price(s.current_price)}\n"
-        f"Buy zone: {fmt_price(s.buy_low)} – {fmt_price(s.buy_high)}\n"
-        f"TP1: {fmt_price(s.tp1)}  (+{s.tp1_pct:.2f}%)\n"
-        f"TP2: {fmt_price(s.tp2)}  (+{s.tp2_pct:.2f}%)\n"
-        f"Invalidation/SL: {fmt_price(s.stop)}  (-{s.risk_pct:.2f}%)\n\n"
-        f"Setup: {s.strategy}\n"
-        f"Score: {s.score:.0f}/100\n"
-        f"1H RSI: {s.rsi_1h:.1f} | 4H RSI: {s.rsi_4h:.1f}\n"
-        f"1H trend: {s.trend_1h}/5 | 4H trend: {s.trend_4h}/5\n"
-        f"Typical 4H move potential: {s.move_potential_pct:.2f}%\n"
-        f"24H quote volume: ${s.quote_volume_24h:,.0f}\n"
-        f"Spread: {s.spread_bps:.1f} bps\n"
-        f"BTC regime: {s.market_regime}\n"
-        f"Purpose screen: {s.purpose_category}\n\n"
-        "⚠️ Signal, not guaranteed profit. Spot only; verify before entry."
-    )
-
-
-def btc_regime(client: BinancePublicClient) -> Tuple[str, int]:
-    d1 = add_indicators(klines_to_df(client.klines("BTCUSDT", "1h", 250)))
-    d4 = add_indicators(klines_to_df(client.klines("BTCUSDT", "4h", 250)))
-    s1, s4 = trend_score(d1), trend_score(d4)
-    if s1 >= 4 and s4 >= 4:
-        return "Bullish", 10
-    if s1 >= 3 and s4 >= 3:
-        return "Neutral/Bullish", 6
-    if s1 <= 1 and s4 <= 2:
-        return "Bearish", -15
-    return "Mixed", 0
-
-
-def old_enough_on_binance(client: BinancePublicClient, symbol: str, min_age_days: int) -> bool:
-    rows = client.klines(symbol, "1d", limit=1, start_time=0)
-    if not rows:
-        return False
-    first_open = datetime.fromtimestamp(rows[0][0] / 1000, tz=timezone.utc)
-    return first_open <= datetime.now(timezone.utc) - timedelta(days=min_age_days)
-
-
-def build_universe(exchange_info: dict, assets_cfg: dict) -> Dict[str, dict]:
-    approved = {a["symbol"].upper(): a for a in assets_cfg.get("assets", []) if a.get("enabled", True)}
-    universe = {}
-    for s in exchange_info.get("symbols", []):
-        base = s.get("baseAsset", "").upper()
-        if (
-            base in approved
-            and s.get("quoteAsset") == "USDT"
-            and s.get("status") == "TRADING"
-            and s.get("isSpotTradingAllowed", True)
-        ):
-            universe[s["symbol"]] = approved[base]
-    return universe
-
-
-def scan() -> List[Signal]:
-    cfg = load_yaml(CONFIG_PATH)
-    assets_cfg = load_yaml(ASSETS_PATH)
-    c = BinancePublicClient(timeout=int(cfg["network"]["timeout_seconds"]))
-
-    exchange = c.exchange_info()
-    universe = build_universe(exchange, assets_cfg)
-    ticker_rows = c.ticker_24h()
-    book_rows = c.book_ticker()
-    tickers = {x["symbol"]: x for x in ticker_rows if "symbol" in x}
-    books = {x["symbol"]: x for x in book_rows if "symbol" in x}
-
-    regime, btc_points = btc_regime(c)
-    if cfg["filters"].get("reject_when_btc_bearish", True) and regime == "Bearish":
-        print("BTC regime is bearish; no new long spot signals this run.")
-        return []
-
-    min_vol = float(cfg["filters"]["min_quote_volume_usdt_24h"])
-    max_spread = float(cfg["filters"]["max_spread_bps"])
-    min_age_days = int(float(cfg["filters"]["minimum_coin_age_years"]) * 365.25)
-    min_move = float(cfg["filters"]["minimum_typical_4h_move_pct"])
-    min_score = float(cfg["filters"]["minimum_signal_score"])
-    max_scan = int(cfg["filters"].get("max_symbols_per_run", 40))
-
-    # Liquidity-first ordering reduces requests and focuses on executable spot markets.
-    candidates = []
-    for symbol, meta in universe.items():
-        t = tickers.get(symbol)
-        b = books.get(symbol)
-        if not t or not b:
-            continue
-        qv = float(t.get("quoteVolume", 0) or 0)
-        bid = float(b.get("bidPrice", 0) or 0)
-        ask = float(b.get("askPrice", 0) or 0)
-        mid = (bid + ask) / 2 if bid > 0 and ask > 0 else 0
-        spread_bps = ((ask - bid) / mid * 10000) if mid else 9999
-        if qv >= min_vol and spread_bps <= max_spread:
-            candidates.append((symbol, meta, qv, spread_bps))
-    candidates.sort(key=lambda x: x[2], reverse=True)
-    candidates = candidates[:max_scan]
-
-    signals: List[Signal] = []
-    for i, (symbol, meta, qv, spread_bps) in enumerate(candidates, start=1):
+def evaluate(market, symbol, cfg, btc, now):
+    h4 = market.bars(symbol, '4h', now)
+    h1 = market.bars(symbol, '1h', now)
+    if not trend(h4) or not trend(h1):
+        raise ValueError('trend:4H+1H mandatory')
+    if h1[-1]['c']/h1[-4]['c']-1 > .06 or h1[-1]['h']-h1[-1]['l'] > 3*atr(h1):
+        raise ValueError('overextension:recent pump')
+    m30, m15 = market.bars(symbol, '30m', now), market.bars(symbol, '15m', now)
+    if m30[-1]['c'] < ema([b['c'] for b in m30], 20)[-1]:
+        raise ValueError('timing:30m alignment')
+    book = market.get('/api/v3/ticker/bookTicker', symbol=symbol)
+    bid, ask = float(book['bidPrice']), float(book['askPrice'])
+    if not 0 < bid <= ask or (ask-bid)/((ask+bid)/2)*100 > cfg['max_spread_pct']:
+        raise ValueError('liquidity:fresh spread')
+    price = (bid+ask)/2
+    options, reasons = [], []
+    for interval, bars in [('15m', m15), ('30m', m30)]:
         try:
-            if not old_enough_on_binance(c, symbol, min_age_days):
-                print(f"[{i}/{len(candidates)}] {symbol}: excluded by >= {min_age_days}d Binance-history proxy")
-                continue
+            names = setups(bars)
+            if not names:
+                raise ValueError('setup:none')
+            c = [b['c'] for b in bars]
+            a, momentum = atr(bars), rsi(c)
+            volume = bars[-1]['v']/max(statistics.mean(b['v'] for b in bars[-21:-1]), 1e-12)
+            extension = (price-ema(c, 20)[-1])/a
+            if not cfg['min_atr_pct'] <= a/price*100 <= cfg['max_atr_pct']:
+                raise ValueError('volatility')
+            if not 50 <= momentum <= 72 or volume < 1.05 or extension > 2 or abs(price-c[-1]) > a*.75:
+                raise ValueError('momentum/volume/overextension')
+            lv = levels(bars, [h1, h4], price, cfg)
+            value = score(dict(trend=1, structure=float(structure(bars)), volume=min(volume/1.5, 1),
+                               momentum=1-abs(momentum-60)/25, volatility=1, liquidity=1,
+                               btc=1 if btc == 'strong uptrend' else .6, extension=1-max(0, extension)/3,
+                               resistance=1, rr=min(lv['rr']/2, 1)))
+            if value < cfg['min_score']:
+                raise ValueError('score')
+            options.append(dict(**lv, price=price, setup=names[0], timing=interval, score=value,
+                                rsi=momentum, volume=volume, btc=btc,
+                                returns=[b['c']/a['c']-1 for a, b in zip(h1, h1[1:])]))
+        except ValueError as exc:
+            reasons.append(interval+':'+str(exc))
+    if not options:
+        raise ValueError('; '.join(reasons))
+    return max(options, key=lambda x: x['score'])
 
-            d1h = add_indicators(klines_to_df(c.klines(symbol, "1h", 260)))
-            d4h = add_indicators(klines_to_df(c.klines(symbol, "4h", 260)))
-            if len(d1h) < 210 or len(d4h) < 210:
-                continue
 
-            t1, t4 = trend_score(d1h), trend_score(d4h)
-            if t1 < int(cfg["filters"]["minimum_trend_score_1h"]) or t4 < int(cfg["filters"]["minimum_trend_score_4h"]):
-                continue
-
-            move_potential = rolling_4h_move_potential(d1h)
-            if move_potential < min_move:
-                continue
-
-            strategy_points, strategy_name = choose_strategy(d1h)
-            if strategy_points <= 0:
-                continue
-
-            levels = price_levels(
-                d1h,
-                min_tp1_pct=float(cfg["targets"]["minimum_tp1_pct"]),
-                min_tp2_pct=float(cfg["targets"]["minimum_tp2_pct"]),
-            )
-            if not levels:
-                continue
-
-            x1, x4 = d1h.iloc[-1], d4h.iloc[-1]
-            trend_points = min(30, (t1 + t4) * 3)
-            liquidity_points = min(10, 4 + math.log10(max(qv, 1) / min_vol + 1) * 4)
-            volatility_points = min(10, 5 + max(0, move_potential - min_move) * 2)
-            volume_points = min(10, max(0, float(x1["vol_ratio"]) * 6))
-            score = min(100, trend_points + strategy_points + liquidity_points + volatility_points + volume_points + btc_points)
-
-            if score < min_score:
-                continue
-
-            signals.append(Signal(
-                symbol=symbol,
-                strategy=strategy_name,
-                score=score,
-                current_price=levels["current_price"],
-                buy_low=levels["buy_low"],
-                buy_high=levels["buy_high"],
-                tp1=levels["tp1"],
-                tp2=levels["tp2"],
-                stop=levels["stop"],
-                tp1_pct=levels["tp1_pct"],
-                tp2_pct=levels["tp2_pct"],
-                risk_pct=levels["risk_pct"],
-                move_potential_pct=move_potential,
-                rsi_1h=float(x1["rsi"]),
-                rsi_4h=float(x4["rsi"]),
-                trend_1h=t1,
-                trend_4h=t4,
-                quote_volume_24h=qv,
-                spread_bps=spread_bps,
-                purpose_category=meta.get("purpose_category", "reviewed utility"),
-                market_regime=regime,
-                note=meta.get("note", ""),
-            ))
-            print(f"[{i}/{len(candidates)}] {symbol}: SIGNAL {score:.0f} {strategy_name}")
-        except Exception as exc:
-            print(f"[{i}/{len(candidates)}] {symbol}: error: {exc}")
-
-    signals.sort(key=lambda s: s.score, reverse=True)
-    return signals[: int(cfg["alerts"].get("max_signals_per_run", 3))]
+def load_config(path):
+    cfg = yaml.safe_load(Path(path).read_text())
+    positive = ['min_age_days', 'min_quote_volume', 'max_spread_pct', 'min_score', 'min_rr', 'max_stop_pct',
+                'min_stop_pct', 'min_target_pct', 'max_atr_pct', 'min_atr_pct', 'cooldown_hours',
+                'max_sector_per_day', 'max_setup_per_run', 'request_interval']
+    if any(not isinstance(cfg.get(k), (float, int)) or not math.isfinite(cfg[k]) or cfg[k] <= 0 for k in positive):
+        raise ValueError('Invalid positive config setting')
+    if not 1 <= cfg['daily_cap'] <= 5 or not cfg['daily_cap'] <= cfg['strong_market_cap'] <= 8:
+        raise ValueError('Daily cap must be 1..5; strong market cap up to 8')
+    if not 0 <= cfg['correlation_threshold'] <= 1 or cfg['min_score'] > 100 or cfg['min_stop_pct'] > cfg['max_stop_pct'] or cfg['min_atr_pct'] > cfg['max_atr_pct']:
+        raise ValueError('Invalid config range')
+    if cfg['base_url'] != 'https://data-api.binance.vision':
+        raise ValueError('Only Binance public market-data endpoint supported')
+    return cfg
 
 
 def main():
-    cfg = load_yaml(CONFIG_PATH)
-    signals = scan()
-
-    # Always write machine-readable output for audit/debugging.
-    out = ROOT / "latest_signals.json"
-    out.write_text(json.dumps([asdict(s) for s in signals], indent=2), encoding="utf-8")
-
-    if not signals:
-        print("No qualifying signal this run.")
+    parser = argparse.ArgumentParser()
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument('--test-telegram', action='store_true')
+    modes.add_argument('--dry-run', action='store_true')
+    parser.add_argument('--symbol')
+    parser.add_argument('--config', default='config.yaml')
+    args = parser.parse_args()
+    if args.test_telegram:
+        telegram('Crypto Spot Signal Bot: connection test only. No trade signal.')
+        print('Telegram test accepted')
         return
-
-    token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
-    chat_id = os.getenv("TELEGRAM_CHAT_ID", "").strip()
-    state = load_state()
-    cooldown = float(cfg["alerts"]["cooldown_hours_same_setup"])
-
-    for s in signals:
-        print("\n" + signal_message(s) + "\n")
-        if not token or not chat_id:
-            print("Telegram secrets missing; printed signal only.")
+    cfg = load_config(args.config)
+    assets = yaml.safe_load(Path('assets.yaml').read_text())
+    state, market = State(cfg['state_path']), Market(cfg)
+    now = market.get('/api/v3/time')['serverTime']/1000
+    if abs(time.time()-now) > 120:
+        raise RuntimeError('Local clock differs from exchange by over 120 seconds')
+    infos = market.get('/api/v3/exchangeInfo')['symbols']
+    tickers = {x['symbol']: x for x in market.get('/api/v3/ticker/24hr')}
+    books = {x['symbol']: x for x in market.get('/api/v3/ticker/bookTicker')}
+    btc = 'strong uptrend' if all(trend(market.bars('BTCUSDT', interval, now)) for interval in ['4h', '1h']) else 'bearish/choppy: long signals suppressed'
+    candidates, counts = [], Counter()
+    def reject(symbol, reason):
+        counts[reason.split(':')[0]] += 1
+        print(f'REJECT {symbol}: {reason}')
+    for info in infos:
+        symbol, base = info['symbol'], info['baseAsset']
+        if info['quoteAsset'] != 'USDT' or args.symbol and symbol != args.symbol.upper():
             continue
-        if not can_alert(s.symbol, s.strategy, cooldown, state):
-            print(f"Cooldown active: {s.symbol} / {s.strategy}")
+        try:
+            asset = assets.get(base, {})
+            if asset.get('status') != 'approved' or not asset.get('notes') or not asset.get('source'):
+                raise ValueError('purpose:unknown/rejected/review needed')
+            if not liquid(info, tickers.get(symbol, {}), books.get(symbol, {}), cfg):
+                raise ValueError('liquidity:status/volume/spread')
+            if symbol not in state.data['ages']:
+                first = market.get('/api/v3/klines', symbol=symbol, interval='1d', startTime=0, limit=1)
+                if not first:
+                    raise ValueError('age:missing history')
+                state.data['ages'][symbol] = int(first[0][0])
+            if not age_ok(state.data['ages'][symbol], now, cfg['min_age_days']):
+                raise ValueError('age:under minimum history')
+            if btc != 'strong uptrend':
+                raise ValueError('BTC:bearish or choppy')
+            result = evaluate(market, symbol, cfg, btc, now)
+            result.update(symbol=symbol, sector=asset['sector'], timestamp=datetime.fromtimestamp(now, timezone.utc).isoformat())
+            candidates.append(result)
+        except ValueError as exc:
+            reject(symbol, str(exc))
+    chosen, setup_counts = [], Counter()
+    cap = cfg['strong_market_cap'] if btc == 'strong uptrend' else cfg['daily_cap']
+    for signal in sorted(candidates, key=lambda x: x['score'], reverse=True):
+        reason = state.allowed(signal['symbol'], signal['sector'], now, cfg, cap)
+        if reason or setup_counts[signal['setup']] >= cfg['max_setup_per_run'] or any(correlation(signal['returns'], x['returns']) >= cfg['correlation_threshold'] for x in chosen):
+            reject(signal['symbol'], reason or 'correlation/setup overlap')
             continue
-        telegram_send(token, chat_id, signal_message(s))
-        mark_alert(s.symbol, s.strategy, state)
+        # A scan takes time: avoid transmitting stale opportunities.
+        if time.time()-now > 1200:
+            raise RuntimeError('Scan exceeded 20-minute freshness budget')
+        if not args.dry_run:
+            if not os.environ.get('TELEGRAM_BOT_TOKEN') or not os.environ.get('TELEGRAM_CHAT_ID'):
+                raise RuntimeError('Required Telegram secrets missing')
+            market.cache.pop(('/api/v3/ticker/bookTicker', (('symbol', signal['symbol']),)), None)
+            fresh = market.get('/api/v3/ticker/bookTicker', symbol=signal['symbol'])
+            bid, ask = float(fresh['bidPrice']), float(fresh['askPrice'])
+            current = (bid+ask)/2
+            if not 0 < bid <= ask or (ask-bid)/current*100 > cfg['max_spread_pct'] or abs(current/signal['price']-1) > .002 or current <= signal['sl'] or current >= signal['tp1']:
+                reject(signal['symbol'], 'freshness:price/spread changed')
+                continue
+            signal['price'] = current
+            state.reserve(signal, now)
+            persist_remote()  # Fail closed if durable reservation cannot be saved.
+            telegram(format_signal(signal))
+        else:
+            state.data['alerts'].append(dict(symbol=signal['symbol'], sector=signal['sector'], time=now, status='dry-run'))
+            print(format_signal(signal))
+        chosen.append(signal)
+        setup_counts[signal['setup']] += 1
+    if not args.dry_run:
+        state.save()
+        persist_remote()
+    if not chosen:
+        print('NO TRADE')
+    print('SUMMARY', json.dumps(dict(rejections=dict(counts), qualified=len(candidates), alerts=len(chosen), dry_run=args.dry_run)))
 
-    save_state(state)
 
-
-if __name__ == "__main__":
-    main()
+if __name__ == '__main__':
+    try:
+        main()
+    except Exception as exc:
+        # Never expose request URLs, credentials, HTTP bodies or exception traces.
+        print('SCAN FAILED:', type(exc).__name__, '— inspect configuration/state and service availability; no automatic retry of alerts')
+        raise SystemExit(1)
