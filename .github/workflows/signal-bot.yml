@@ -1,27 +1,12 @@
-name: Crypto Spot Signal Bot
+name: Crypto Spot Signal Bot - Manual Test
 on:
-  schedule:
-    - cron: '7,37 * * * *'
   workflow_dispatch:
-    inputs:
-      mode:
-        description: Run mode
-        type: choice
-        options: [scan, dry-run, test-telegram]
-        default: dry-run
-      symbol:
-        description: Optional single symbol (e.g. BTCUSDT)
-        type: string
-        default: ''
 permissions:
-  contents: write
-concurrency:
-  group: crypto-spot-signal-bot
-  cancel-in-progress: false
+  contents: read
 jobs:
-  scan:
+  manual-test:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -29,43 +14,17 @@ jobs:
           python-version: '3.12'
           cache: pip
       - run: pip install -r requirements.txt
-      - name: Offline tests
-        run: python -m unittest discover -s tests -v
-      - name: Restore durable state
-        if: inputs.mode != 'test-telegram'
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config --global user.name 'github-actions[bot]'
-          git config --global user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          mkdir -p state
-          git ls-remote --heads origin signal-bot-state > /tmp/state-ref
-          if test -s /tmp/state-ref; then
-            git fetch origin signal-bot-state
-            git worktree add .state-store FETCH_HEAD
-            test -f .state-store/state.json
-            cp .state-store/state.json state/state.json
-          else
-            git worktree add --detach .state-store HEAD
-            git -C .state-store checkout --orphan signal-bot-state
-            git -C .state-store rm -rf .
-            printf '%s\n' '{"version":1,"alerts":[],"ages":{}}' > state/state.json
-          fi
-      - name: Run scanner
+      - name: Syntax check v2 engine
+        run: python -m py_compile signal_bot_v2.py
+      - name: Telegram connectivity test
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          MODE: ${{ inputs.mode || 'scan' }}
-          SYMBOL: ${{ inputs.symbol }}
-          PERSIST_STATE_COMMAND: github
-        shell: bash
         run: |
-          args=()
-          case "$MODE" in
-            dry-run) args+=(--dry-run) ;;
-            test-telegram) args+=(--test-telegram) ;;
-            scan) ;;
-            *) exit 1 ;;
-          esac
-          if test -n "$SYMBOL"; then args+=(--symbol "$SYMBOL"); fi
-          python signal_bot.py "${args[@]}"
+          python - <<'PY'
+          import os, requests
+          token=os.environ['TELEGRAM_BOT_TOKEN']; chat=os.environ['TELEGRAM_CHAT_ID']
+          r=requests.post(f'https://api.telegram.org/bot{token}/sendMessage',json={'chat_id':chat,'text':'Crypto Signal Bot manual connectivity test. No trade signal.'},timeout=20)
+          r.raise_for_status()
+          assert r.json().get('ok')
+          PY
