@@ -12,6 +12,10 @@ max_atr_pct: 3.5
 min_atr_pct: 0.12
 min_volume_ratio: 0.85
 max_3h_pump_pct: 8.0
+smc_enabled: true
+smc_min_gap_atr: 0.08
+smc_retest_atr_tolerance: 0.30
+smc_score_bonus: 4
 cooldown_hours: 8
 daily_cap: 5
 max_sector_per_day: 2
