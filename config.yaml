@@ -34,6 +34,13 @@ smc_min_gap_atr: 0.08
 smc_retest_atr_tolerance: 0.30
 smc_score_bonus: 4
 
+# Primary spot coin-finder rule
+finder_require_1d_uptrend: true
+finder_require_1h_uptrend: true
+finder_rsi_1h_min: 50
+finder_rsi_1h_max: 55
+finder_rsi_30m_min: 58
+
 # Alert control
 cooldown_hours: 4
 daily_cap: 6
