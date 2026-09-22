@@ -1,7 +1,6 @@
 {
   "$schema": "https://railway.com/railway.schema.json",
   "deploy": {
-    "cronSchedule": "*/15 * * * *",
-    "restartPolicyType": "NEVER"
+    "restartPolicyType": "ALWAYS"
   }
 }
