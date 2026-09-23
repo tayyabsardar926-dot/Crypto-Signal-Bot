@@ -2,7 +2,7 @@
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Spot Radar Pro</title></head><body style="margin:0;background:#08101e;color:white;font-family:Arial"><div id="loading" style="padding:30px;text-align:center">Loading Spot Radar Pro…</div><script>
 (async()=>{
   try{
-    const r=await fetch('./index.html?fix=2',{cache:'no-store'});
+    const r=await fetch('./base.html?fix=3',{cache:'no-store'});
     if(!r.ok) throw new Error('Base dashboard '+r.status);
     let h=await r.text();
     const old="async function marketGet(ex,path){let last;for(const b of BASES[ex]){try{return await fetchJson(b+path)}catch(e){last=e}}throw last||Error('endpoint unavailable')}";
