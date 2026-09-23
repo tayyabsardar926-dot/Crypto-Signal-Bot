@@ -1,0 +1,20 @@
+{
+  "port": 8787,
+  "scanCacheSeconds": 180,
+  "autoRefreshSeconds": 300,
+  "topMarketsPerExchange": 30,
+  "deepValidateTop": 5,
+  "historyDays": 120,
+  "minHistoryEvents": 30,
+  "filters": {
+    "binanceMin24hQuoteVolumeUsd": 2000000,
+    "mexcMin24hQuoteVolumeUsd": 1000000,
+    "maxSpreadPct": 0.60
+  },
+  "buyRules": {
+    "minScore": 80,
+    "minTp1Frequency": 0.60,
+    "minWilsonLowerBound": 0.50,
+    "maxSpreadPct": 0.35
+  }
+}

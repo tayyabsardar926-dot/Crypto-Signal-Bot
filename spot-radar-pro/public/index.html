@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Spot Radar Pro</title><link rel="stylesheet" href="/style.css"></head>
+<body>
+<header><div><div class="brand">SPOT RADAR <b>PRO</b></div><div class="sub">Binance + MEXC Spot · USDT · 1–6h opportunity scanner</div></div><button id="scanBtn">↻ Scan now</button></header>
+<main>
+<section id="marketBar" class="marketbar"></section>
+<section class="hero"><h1>Best trade now</h1><div id="bestTrade" class="best skeleton">Scanning live markets…</div></section>
+<section><div class="sectionTitle"><h2>Top trade-ready setups</h2><span id="topCount"></span></div><div id="top3" class="grid"></div></section>
+<section><div class="sectionTitle"><h2>Watchlist</h2><span>Strong setups waiting for validation/entry confirmation</span></div><div id="watch" class="grid compact"></div></section>
+<section id="coin-map"><div class="sectionTitle"><h2>Opportunity bubbles</h2><span>Bigger = higher setup score, not guaranteed profit</span></div><div id="bubbles" class="bubbles"></div></section>
+<section class="method"><h2>How to read this</h2><div class="methodgrid"><div><b>BUY NOW</b><p>Strict score + stage + spread + historical validation passed.</p></div><div><b>WATCH</b><p>Interesting setup, but one or more trade-ready conditions are missing.</p></div><div><b>AVOID</b><p>Weak, late, overextended or poor-quality setup.</p></div></div><p class="warn">Research tool only. Historical frequency is not a guaranteed future probability. Orders are never placed automatically.</p></section>
+</main>
+<div id="modal" class="modal hidden"><div class="modalCard"><button id="closeModal" class="close">×</button><div id="detail"></div></div></div>
+<script type="module" src="/app.js"></script></body></html>

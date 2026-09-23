@@ -1,0 +1,30 @@
+name: Crypto Spot Signal Bot - Manual Test
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  manual-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Syntax check v2 engine
+        run: python -m py_compile signal_bot_v2.py
+      - name: Telegram connectivity test
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          python - <<'PY'
+          import os, requests
+          token=os.environ['TELEGRAM_BOT_TOKEN']; chat=os.environ['TELEGRAM_CHAT_ID']
+          r=requests.post(f'https://api.telegram.org/bot{token}/sendMessage',json={'chat_id':chat,'text':'Crypto Signal Bot manual connectivity test. No trade signal.'},timeout=20)
+          r.raise_for_status()
+          assert r.json().get('ok')
+          PY

@@ -1,0 +1,49 @@
+base_url: https://data-api.binance.vision
+min_age_days: 548
+min_quote_volume: 5000000
+max_spread_pct: 0.15
+
+# Quality / timing
+min_score: 76
+min_signal_rsi: 50
+max_signal_rsi: 72
+max_signal_rsi_drop: 2.0
+min_h1_rsi: 50
+max_h1_rsi: 72
+max_h1_rsi_drop: 2.5
+min_volume_ratio: 0.90
+min_atr_pct: 0.12
+max_atr_pct: 3.5
+max_3h_pump_pct: 7.0
+
+# Entry freshness: reject signals after price has already run away
+max_entry_extension_pct: 0.60
+max_entry_extension_atr: 0.70
+
+# Profit targets: this guarantees target room in the setup, NOT actual profit
+min_live_upside_pct: 1.0
+tp2_min_pct: 1.8
+max_tp2_h1_atr: 3.0
+runner_min_pct: 2.8
+runner_max_pct: 6.0
+runner_max_h1_atr: 4.0
+
+# SMC
+smc_enabled: true
+smc_min_gap_atr: 0.08
+smc_retest_atr_tolerance: 0.30
+smc_score_bonus: 4
+
+# Primary spot coin-finder rule
+finder_require_1d_uptrend: true
+finder_require_1h_uptrend: true
+finder_rsi_1h_min: 50
+finder_rsi_1h_max: 55
+finder_rsi_30m_min: 58
+
+# Alert control
+cooldown_hours: 4
+daily_cap: 6
+max_sector_per_day: 2
+request_interval: 0.15
+state_path: state/state.json
