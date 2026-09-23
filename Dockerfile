@@ -1,15 +1,6 @@
-FROM python:3.12-slim
-
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
-
+FROM node:20-alpine
 WORKDIR /app
-
-COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
-
+COPY package.json ./
 COPY . .
-
-RUN mkdir -p /app/state
-
-CMD ["python", "signal_bot.py"]
+ENV NODE_ENV=production
+CMD ["npm","start"]
