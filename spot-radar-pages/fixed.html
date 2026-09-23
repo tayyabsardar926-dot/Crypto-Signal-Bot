@@ -1,0 +1,16 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Spot Radar Pro</title></head><body style="margin:0;background:#08101e;color:white;font-family:Arial"><div id="loading" style="padding:30px;text-align:center">Loading Spot Radar Pro…</div><script>
+(async()=>{
+  try{
+    const r=await fetch('./index.html?fix=2',{cache:'no-store'});
+    if(!r.ok) throw new Error('Base dashboard '+r.status);
+    let h=await r.text();
+    const old="async function marketGet(ex,path){let last;for(const b of BASES[ex]){try{return await fetchJson(b+path)}catch(e){last=e}}throw last||Error('endpoint unavailable')}";
+    const neu="async function marketGet(ex,path){let last;for(const b of BASES[ex]){const target=b+path;try{return await fetchJson(target)}catch(e){last=e}if(ex==='mexc'){try{return await fetchJson('https://api.allorigins.win/raw?url='+encodeURIComponent(target),20000)}catch(e){last=e}}}throw last||Error('endpoint unavailable')}";
+    if(!h.includes(old)) throw new Error('Patch target not found');
+    h=h.replace(old,neu);
+    h=h.replace('free browser build','free browser build · MEXC CORS fallback enabled');
+    document.open();document.write(h);document.close();
+  }catch(e){document.body.innerHTML='<div style="padding:30px;color:#ffb4bd">Dashboard load error: '+String(e.message||e)+'</div>'}
+})();
+</script></body></html>
