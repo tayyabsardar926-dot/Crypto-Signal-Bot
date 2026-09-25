@@ -1,15 +1,5 @@
 FROM python:3.12-slim
-
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
-
 WORKDIR /app
-
-COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
-
-COPY . .
-
-RUN mkdir -p /app/state
-
-CMD ["python", "signal_bot.py"]
+COPY index.html /app/index.html
+ENV PYTHONUNBUFFERED=1
+CMD ["sh", "-c", "python -m http.server ${PORT:-8080} --bind 0.0.0.0"]
