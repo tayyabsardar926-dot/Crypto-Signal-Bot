@@ -1,0 +1,504 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Crypto Spot Signal Dashboard</title>
+<style>
+  :root{
+    --bg:#07111f; --panel:#0d192b; --panel2:#101f34; --line:#21334c;
+    --text:#e8f0fb; --muted:#90a3bb; --green:#19c37d; --red:#ff5d6c;
+    --amber:#f7b84b; --blue:#5ca8ff; --violet:#8f7cff; --shadow:0 18px 55px rgba(0,0,0,.25);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:radial-gradient(circle at 20% 0%,#102340 0,#07111f 40%);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+  body{min-height:100vh}
+  button,select,input{font:inherit}
+  .wrap{max-width:1500px;margin:auto;padding:18px}
+  .topbar{display:flex;align-items:center;gap:14px;justify-content:space-between;margin-bottom:16px}
+  .brand{display:flex;align-items:center;gap:12px}
+  .logo{width:42px;height:42px;border-radius:13px;background:linear-gradient(135deg,var(--green),var(--blue));box-shadow:0 8px 24px rgba(25,195,125,.2);display:grid;place-items:center;font-weight:900;color:#041019}
+  h1{font-size:19px;margin:0}
+  .sub{color:var(--muted);font-size:12px;margin-top:3px}
+  .status{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12px}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--amber)}
+  .dot.live{background:var(--green);box-shadow:0 0 0 5px rgba(25,195,125,.10)}
+  .controls{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+  .control{background:rgba(13,25,43,.88);border:1px solid var(--line);border-radius:13px;padding:8px 10px;color:var(--text)}
+  select,input{background:transparent;color:var(--text);border:0;outline:0}
+  select option{background:#0d192b}
+  button{border:1px solid var(--line);background:#11243c;color:var(--text);padding:10px 14px;border-radius:12px;cursor:pointer}
+  button:hover{filter:brightness(1.08)}
+  .grid{display:grid;grid-template-columns:1.5fr .9fr;gap:14px}
+  .panel{background:linear-gradient(180deg,rgba(16,31,52,.95),rgba(10,23,40,.95));border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);overflow:hidden}
+  .panel-head{padding:15px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:12px}
+  .panel-title{font-weight:800;font-size:14px}
+  .panel-body{padding:16px}
+  .hero{display:grid;grid-template-columns:1.2fr .8fr;gap:12px}
+  .price{font-size:38px;font-weight:900;letter-spacing:-1px}
+  .change{font-size:13px;font-weight:700;margin-top:4px}
+  .muted{color:var(--muted)}
+  .signal-card{border:1px solid var(--line);border-radius:16px;padding:16px;background:#0a1729}
+  .signal-row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+  .signal{font-size:32px;font-weight:950;letter-spacing:.5px}
+  .signal.BUY{color:var(--green)} .signal.EXIT{color:var(--red)} .signal.WAIT{color:var(--amber)}
+  .score{font-size:28px;font-weight:900}
+  .small{font-size:12px;color:var(--muted)}
+  .metric-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:14px}
+  .metric{border:1px solid var(--line);border-radius:14px;padding:12px;background:rgba(4,14,27,.36)}
+  .metric .k{color:var(--muted);font-size:11px;margin-bottom:7px}
+  .metric .v{font-weight:850;font-size:15px}
+  .tf-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .tf{border:1px solid var(--line);border-radius:14px;padding:13px;background:rgba(4,14,27,.36)}
+  .tf h3{margin:0 0 10px;font-size:14px}
+  .pill{display:inline-flex;align-items:center;border-radius:999px;padding:5px 8px;font-weight:800;font-size:11px}
+  .bull{color:#7cf0ba;background:rgba(25,195,125,.12);border:1px solid rgba(25,195,125,.25)}
+  .bear{color:#ff9aa4;background:rgba(255,93,108,.10);border:1px solid rgba(255,93,108,.22)}
+  .flat{color:#ffd58b;background:rgba(247,184,75,.10);border:1px solid rgba(247,184,75,.22)}
+  .row{display:flex;justify-content:space-between;gap:10px;margin-top:8px;font-size:12px}
+  .levels{display:grid;grid-template-columns:repeat(2,1fr);gap:9px}
+  .level{border:1px solid var(--line);border-radius:12px;padding:11px}
+  .level span{display:block;color:var(--muted);font-size:10px}
+  .level b{display:block;margin-top:4px}
+  .method{font-size:12px;line-height:1.55;color:#c3d0df}
+  .method b{color:var(--text)}
+  .chart-wrap{height:330px;position:relative}
+  canvas{width:100%;height:100%;display:block}
+  .footer-note{font-size:11px;line-height:1.5;color:var(--muted);padding:13px 16px;border-top:1px solid var(--line)}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th,td{text-align:left;padding:9px 7px;border-bottom:1px solid var(--line);white-space:nowrap}
+  th{color:var(--muted);font-weight:700}
+  .history-wrap{overflow:auto;max-height:280px}
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
+  .stat{border:1px solid var(--line);border-radius:12px;padding:10px}
+  .stat .n{font-size:18px;font-weight:900}
+  .error{display:none;background:rgba(255,93,108,.1);color:#ffb2ba;border:1px solid rgba(255,93,108,.25);border-radius:12px;padding:10px;margin-bottom:12px;font-size:12px}
+  .banner{background:linear-gradient(90deg,rgba(92,168,255,.12),rgba(143,124,255,.10));border:1px solid rgba(92,168,255,.22);padding:11px 13px;border-radius:13px;font-size:12px;color:#cddcf1;margin-bottom:14px}
+  .rightcol{display:grid;gap:14px;align-content:start}
+  @media(max-width:980px){.grid{grid-template-columns:1fr}.hero{grid-template-columns:1fr}.metric-grid{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:620px){.wrap{padding:10px}.topbar{align-items:flex-start}.tf-grid,.levels,.stats{grid-template-columns:1fr}.price{font-size:31px}.metric-grid{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div class="brand">
+      <div class="logo">S</div>
+      <div>
+        <h1>Crypto Spot Signal Dashboard</h1>
+        <div class="sub">Binance Spot • long-only • transparent rule-based research signal</div>
+      </div>
+    </div>
+    <div class="status"><span id="liveDot" class="dot"></span><span id="connText">Connecting…</span></div>
+  </div>
+
+  <div class="banner">
+    <b>Research mode:</b> BUY / WAIT / EXIT only. No shorts, no leverage. The “setup score” is not a historical win-rate claim.
+    Forward results below are stored only in this browser.
+  </div>
+
+  <div class="controls">
+    <label class="control">Coin&nbsp;
+      <select id="symbol">
+        <option>BTCUSDT</option><option>ETHUSDT</option><option>BNBUSDT</option><option>SOLUSDT</option>
+        <option>XRPUSDT</option><option>ADAUSDT</option><option>LINKUSDT</option><option>AVAXUSDT</option><option selected>LTCUSDT</option>
+      </select>
+    </label>
+    <label class="control">Account USDT&nbsp;<input id="account" type="number" min="10" value="1000" style="width:82px"></label>
+    <label class="control">Risk %&nbsp;<input id="riskPct" type="number" min=".1" max="5" step=".1" value="1" style="width:54px"></label>
+    <button id="refresh">Refresh now</button>
+    <button id="clearHistory">Clear local history</button>
+  </div>
+
+  <div id="error" class="error"></div>
+
+  <div class="grid">
+    <div>
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <div class="panel-title"><span id="coinLabel">LTC/USDT</span></div>
+            <div class="small" id="updated">Waiting for market data…</div>
+          </div>
+          <div class="small">Auto refresh: 30s</div>
+        </div>
+        <div class="panel-body">
+          <div class="hero">
+            <div>
+              <div class="price" id="price">—</div>
+              <div class="change" id="change24">24h —</div>
+              <div class="metric-grid">
+                <div class="metric"><div class="k">Market regime</div><div class="v" id="regime">—</div></div>
+                <div class="metric"><div class="k">24h quote volume</div><div class="v" id="vol24">—</div></div>
+                <div class="metric"><div class="k">1H ATR(14)</div><div class="v" id="atr1h">—</div></div>
+                <div class="metric"><div class="k">1H volume ratio</div><div class="v" id="volRatio">—</div></div>
+              </div>
+            </div>
+
+            <div class="signal-card">
+              <div class="signal-row">
+                <div>
+                  <div class="small">EXPERIMENTAL SIGNAL</div>
+                  <div id="signal" class="signal WAIT">WAIT</div>
+                </div>
+                <div style="text-align:right">
+                  <div class="small">Setup score</div>
+                  <div id="score" class="score">—</div>
+                </div>
+              </div>
+              <div class="small" id="signalWhy" style="margin-top:11px;line-height:1.5">Calculating…</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" style="margin-top:14px">
+        <div class="panel-head">
+          <div class="panel-title">1H Price Context</div>
+          <div class="small">Last ~200 bars</div>
+        </div>
+        <div class="panel-body">
+          <div class="chart-wrap"><canvas id="chart"></canvas></div>
+        </div>
+      </section>
+
+      <section class="panel" style="margin-top:14px">
+        <div class="panel-head">
+          <div class="panel-title">Multi-timeframe context</div>
+          <div class="small">EMA20 / EMA50 • RSI14 • Volume</div>
+        </div>
+        <div class="panel-body">
+          <div id="tfGrid" class="tf-grid"></div>
+        </div>
+      </section>
+    </div>
+
+    <div class="rightcol">
+      <section class="panel">
+        <div class="panel-head"><div class="panel-title">Spot trade plan</div><div class="small">Only active on BUY</div></div>
+        <div class="panel-body">
+          <div class="levels">
+            <div class="level"><span>Entry zone</span><b id="entry">—</b></div>
+            <div class="level"><span>Stop</span><b id="stop">—</b></div>
+            <div class="level"><span>TP1 • 1R</span><b id="tp1">—</b></div>
+            <div class="level"><span>TP2 • 1.5R</span><b id="tp2">—</b></div>
+            <div class="level"><span>TP3 • 2R</span><b id="tp3">—</b></div>
+            <div class="level"><span>Example size</span><b id="size">—</b></div>
+          </div>
+          <div class="small" style="margin-top:10px;line-height:1.5">
+            Position size uses your account and risk inputs, capped to available Spot cash. It is a calculator, not a recommendation.
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head"><div class="panel-title">Methodology</div><div class="small">Frozen v1 logic</div></div>
+        <div class="panel-body method">
+          <b>Hypothesis:</b> a Spot BUY should require agreement between the slower 4H trend and 1H trend, while 15m is used only for timing/momentum context.
+          <br><br>
+          <b>BUY:</b> 4H EMA20 &gt; EMA50, 1H EMA20 &gt; EMA50, setup score ≥ 70, and 1H RSI is not overextended.
+          <br><br>
+          <b>EXIT:</b> 4H trend turns bearish, or 1H trend is bearish with weak RSI. Otherwise <b>WAIT</b>.
+          <br><br>
+          <b>Risk levels:</b> 1H ATR(14); stop = 1.5 ATR below entry midpoint; targets shown as R-multiples.
+          <br><br>
+          <b>Not included in v1:</b> futures funding, open interest, liquidation maps or hidden “AI accuracy” claims.
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head"><div class="panel-title">Local forward tracker</div><div class="small">Not backtest results</div></div>
+        <div class="panel-body">
+          <div class="stats">
+            <div class="stat"><div class="small">Closed</div><div class="n" id="closedN">0</div></div>
+            <div class="stat"><div class="small">Wins</div><div class="n" id="winsN">0</div></div>
+            <div class="stat"><div class="small">Losses</div><div class="n" id="lossN">0</div></div>
+            <div class="stat"><div class="small">Win rate</div><div class="n" id="wrN">—</div></div>
+          </div>
+          <div class="history-wrap">
+            <table>
+              <thead><tr><th>Time</th><th>Coin</th><th>Signal</th><th>Price</th><th>Status</th></tr></thead>
+              <tbody id="history"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="footer-note">
+          History is saved to this browser via localStorage. It does not prove profitability and should be forward-tested before real-money use.
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<script>
+const SYMBOLS = ["BTCUSDT","ETHUSDT","BNBUSDT","SOLUSDT","XRPUSDT","ADAUSDT","LINKUSDT","AVAXUSDT","LTCUSDT"];
+const ENDPOINTS = [
+  "https://data-api.binance.vision/api/v3",
+  "https://api.binance.com/api/v3",
+  "https://api-gcp.binance.com/api/v3"
+];
+let state = { signal:"WAIT", price:null, plan:null, data:null };
+
+const $ = id => document.getElementById(id);
+const fmt = (n, d=4) => {
+  if (!Number.isFinite(n)) return "—";
+  if (Math.abs(n)>=1000) return n.toLocaleString(undefined,{maximumFractionDigits:2});
+  if (Math.abs(n)>=1) return n.toLocaleString(undefined,{maximumFractionDigits:d>2?2:d});
+  return n.toLocaleString(undefined,{maximumFractionDigits:d});
+};
+const money = n => Number.isFinite(n) ? "$"+fmt(n, n<1?5:2) : "—";
+const pct = n => Number.isFinite(n) ? (n>=0?"+":"")+n.toFixed(2)+"%" : "—";
+
+function ema(values, period){
+  if (!values.length) return [];
+  const k = 2/(period+1), out = [];
+  let prev = values[0];
+  for(let i=0;i<values.length;i++){
+    prev = i===0 ? values[i] : values[i]*k + prev*(1-k);
+    out.push(prev);
+  }
+  return out;
+}
+function sma(values, period){
+  let out = Array(values.length).fill(null), sum=0;
+  for(let i=0;i<values.length;i++){
+    sum += values[i];
+    if(i>=period) sum -= values[i-period];
+    if(i>=period-1) out[i]=sum/period;
+  }
+  return out;
+}
+function rsi(values, period=14){
+  if(values.length<period+1) return null;
+  let gains=0, losses=0;
+  for(let i=1;i<=period;i++){
+    const d=values[i]-values[i-1];
+    if(d>=0) gains+=d; else losses-=d;
+  }
+  let avgG=gains/period, avgL=losses/period;
+  for(let i=period+1;i<values.length;i++){
+    const d=values[i]-values[i-1];
+    const g=Math.max(d,0), l=Math.max(-d,0);
+    avgG=(avgG*(period-1)+g)/period;
+    avgL=(avgL*(period-1)+l)/period;
+  }
+  if(avgL===0) return 100;
+  const rs=avgG/avgL;
+  return 100 - 100/(1+rs);
+}
+function atr(klines, period=14){
+  if(klines.length<period+1) return null;
+  const trs=[];
+  for(let i=1;i<klines.length;i++){
+    const h=+klines[i][2], l=+klines[i][3], pc=+klines[i-1][4];
+    trs.push(Math.max(h-l, Math.abs(h-pc), Math.abs(l-pc)));
+  }
+  return trs.slice(-period).reduce((a,b)=>a+b,0)/period;
+}
+function volumeRatio(klines, period=20){
+  if(klines.length<period+1) return null;
+  const vols=klines.map(k=>+k[5]);
+  const last=vols[vols.length-1];
+  const avg=vols.slice(-(period+1),-1).reduce((a,b)=>a+b,0)/period;
+  return avg ? last/avg : null;
+}
+
+async function api(path){
+  let lastErr;
+  for(const base of ENDPOINTS){
+    try{
+      const r=await fetch(base+path,{cache:"no-store"});
+      if(!r.ok) throw new Error("HTTP "+r.status);
+      return await r.json();
+    }catch(e){ lastErr=e; }
+  }
+  throw lastErr || new Error("Market data unavailable");
+}
+
+async function getKlines(symbol, interval, limit=220){
+  return api(`/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`);
+}
+async function get24(symbol){
+  return api(`/ticker/24hr?symbol=${symbol}`);
+}
+
+function tfStats(klines){
+  const closes=klines.map(k=>+k[4]), e20=ema(closes,20), e50=ema(closes,50);
+  const last=closes.at(-1), a=e20.at(-1), b=e50.at(-1);
+  const rr=rsi(closes,14), vr=volumeRatio(klines,20);
+  const trend = a>b*1.001 ? "Bullish" : a<b*0.999 ? "Bearish" : "Sideways";
+  return {last,ema20:a,ema50:b,rsi:rr,vr,trend,closes};
+}
+
+function calcSignal(t15,t1,t4,a1){
+  let score=0, why=[];
+  if(t4.trend==="Bullish"){score+=25;why.push("4H trend bullish");}
+  if(t1.trend==="Bullish"){score+=20;why.push("1H trend bullish");}
+  if(t15.trend==="Bullish"){score+=10;why.push("15m trend bullish");}
+  if(t1.rsi>=50 && t1.rsi<=68){score+=15;why.push("1H RSI healthy");}
+  else if(t1.rsi>=45 && t1.rsi<=72){score+=8;}
+  if(t15.rsi>=45 && t15.rsi<=68){score+=10;why.push("15m momentum controlled");}
+  if(t1.vr>=1){score+=10;why.push("1H volume ≥ average");}
+  if(t1.last>t1.ema20){score+=10;why.push("price above 1H EMA20");}
+  score=Math.max(0,Math.min(100,score));
+
+  let signal="WAIT";
+  if(t4.trend==="Bullish" && t1.trend==="Bullish" && score>=70 && t1.rsi<=72) signal="BUY";
+  if(t4.trend==="Bearish" || (t1.trend==="Bearish" && t1.rsi<45)) signal="EXIT";
+
+  let reason = signal==="BUY"
+    ? "Trend agreement + momentum confirmation. " + why.slice(0,4).join(" • ")
+    : signal==="EXIT"
+      ? "Slow trend/momentum has weakened; Spot stance = cash/exit, not short."
+      : "Conditions are mixed. No forced trade.";
+  return {signal,score,reason};
+}
+
+function buildPlan(signal, price, atr1){
+  if(signal!=="BUY" || !Number.isFinite(atr1)) return null;
+  const mid=price, half=0.15*atr1;
+  const low=mid-half, high=mid+half;
+  const stop=mid-1.5*atr1;
+  const R=mid-stop;
+  return {low,high,mid,stop,tp1:mid+R,tp2:mid+1.5*R,tp3:mid+2*R};
+}
+
+function trendPill(trend){
+  const cls=trend==="Bullish"?"bull":trend==="Bearish"?"bear":"flat";
+  return `<span class="pill ${cls}">${trend}</span>`;
+}
+
+function renderTF(name, s){
+  return `<div class="tf">
+    <div style="display:flex;justify-content:space-between;align-items:center"><h3>${name}</h3>${trendPill(s.trend)}</div>
+    <div class="row"><span class="muted">RSI(14)</span><b>${fmt(s.rsi,1)}</b></div>
+    <div class="row"><span class="muted">EMA20</span><b>${money(s.ema20)}</b></div>
+    <div class="row"><span class="muted">EMA50</span><b>${money(s.ema50)}</b></div>
+    <div class="row"><span class="muted">Volume ratio</span><b>${fmt(s.vr,2)}×</b></div>
+  </div>`;
+}
+
+function renderChart(closes, e20, e50){
+  const c=$("chart"), box=c.getBoundingClientRect(), dpr=window.devicePixelRatio||1;
+  c.width=Math.floor(box.width*dpr); c.height=Math.floor(box.height*dpr);
+  const ctx=c.getContext("2d"); ctx.scale(dpr,dpr);
+  const w=box.width,h=box.height,pad=30;
+  ctx.clearRect(0,0,w,h);
+  const all=[...closes,...e20,...e50].filter(Number.isFinite);
+  const min=Math.min(...all), max=Math.max(...all), range=(max-min)||1;
+  const x=i=>pad+(w-pad*2)*i/(closes.length-1);
+  const y=v=>h-pad-(h-pad*2)*(v-min)/range;
+
+  ctx.strokeStyle="#21334c";ctx.lineWidth=1;
+  for(let j=0;j<5;j++){ const yy=pad+(h-pad*2)*j/4; ctx.beginPath();ctx.moveTo(pad,yy);ctx.lineTo(w-pad,yy);ctx.stroke(); }
+
+  function line(arr,color,width){
+    ctx.strokeStyle=color;ctx.lineWidth=width;ctx.beginPath();
+    arr.forEach((v,i)=>{if(!Number.isFinite(v))return; const xx=x(i),yy=y(v); if(i===0)ctx.moveTo(xx,yy);else ctx.lineTo(xx,yy);});
+    ctx.stroke();
+  }
+  line(closes,"#e8f0fb",1.4); line(e20,"#19c37d",1.2); line(e50,"#5ca8ff",1.2);
+  ctx.fillStyle="#90a3bb";ctx.font="11px system-ui";
+  ctx.fillText("Close",pad,14);ctx.fillStyle="#19c37d";ctx.fillText("EMA20",pad+42,14);ctx.fillStyle="#5ca8ff";ctx.fillText("EMA50",pad+92,14);
+}
+
+function historyLoad(){ try{return JSON.parse(localStorage.getItem("spotdash_history")||"[]")}catch{return []} }
+function historySave(h){ localStorage.setItem("spotdash_history",JSON.stringify(h.slice(-200))); }
+function recordSignal(symbol, signal, price, plan){
+  const h=historyLoad(), last=h[h.length-1];
+  if(last && last.symbol===symbol && last.signal===signal && last.status==="OPEN") return;
+  if(last && last.symbol===symbol && last.status==="OPEN" && last.signal==="BUY" && signal!=="BUY"){
+    last.status = price>=last.price ? "WIN-EXIT" : "LOSS-EXIT";
+    last.exitPrice=price; last.closedAt=Date.now();
+  }
+  if(!last || last.symbol!==symbol || last.signal!==signal){
+    h.push({time:Date.now(),symbol,signal,price,status:signal==="BUY"?"OPEN":"INFO",plan});
+  }
+  historySave(h); renderHistory();
+}
+function evaluateOpen(symbol, klines){
+  const h=historyLoad();
+  const opens=h.filter(x=>x.symbol===symbol && x.signal==="BUY" && x.status==="OPEN" && x.plan);
+  if(!opens.length)return;
+  for(const rec of opens){
+    for(const k of klines){
+      const t=+k[0], hi=+k[2], lo=+k[3];
+      if(t<rec.time) continue;
+      if(lo<=rec.plan.stop){rec.status="LOSS-SL";rec.closedAt=t;rec.exitPrice=rec.plan.stop;break;}
+      if(hi>=rec.plan.tp1){rec.status="WIN-TP1";rec.closedAt=t;rec.exitPrice=rec.plan.tp1;break;}
+    }
+  }
+  historySave(h); renderHistory();
+}
+function renderHistory(){
+  const h=historyLoad().slice().reverse();
+  $("history").innerHTML = h.slice(0,30).map(x=>`<tr>
+    <td>${new Date(x.time).toLocaleString([], {month:"short",day:"2-digit",hour:"2-digit",minute:"2-digit"})}</td>
+    <td>${x.symbol.replace("USDT","")}</td><td>${x.signal}</td><td>${money(x.price)}</td><td>${x.status}</td></tr>`).join("") || `<tr><td colspan="5" class="muted">No local signals yet.</td></tr>`;
+  const closed=h.filter(x=>x.status.startsWith("WIN")||x.status.startsWith("LOSS"));
+  const wins=closed.filter(x=>x.status.startsWith("WIN")).length, losses=closed.length-wins;
+  $("closedN").textContent=closed.length; $("winsN").textContent=wins; $("lossN").textContent=losses;
+  $("wrN").textContent=closed.length ? (100*wins/closed.length).toFixed(1)+"%" : "—";
+}
+
+async function refresh(){
+  const symbol=$("symbol").value;
+  $("error").style.display="none"; $("connText").textContent="Updating…"; $("liveDot").className="dot";
+  try{
+    const [k15,k1,k4,t24] = await Promise.all([
+      getKlines(symbol,"15m"), getKlines(symbol,"1h"), getKlines(symbol,"4h"), get24(symbol)
+    ]);
+    const s15=tfStats(k15), s1=tfStats(k1), s4=tfStats(k4);
+    const a1=atr(k1,14), price=s15.last;
+    const sig=calcSignal(s15,s1,s4,a1), plan=buildPlan(sig.signal,price,a1);
+
+    state={signal:sig.signal,price,plan,data:{k15,k1,k4,s15,s1,s4}};
+
+    $("coinLabel").textContent=symbol.replace("USDT","/USDT");
+    $("price").textContent=money(price);
+    $("change24").textContent="24h "+pct(+t24.priceChangePercent);
+    $("change24").style.color=(+t24.priceChangePercent)>=0?"var(--green)":"var(--red)";
+    $("vol24").textContent=Number.isFinite(+t24.quoteVolume) ? (+t24.quoteVolume/1e6).toFixed(1)+"M USDT" : "—";
+    $("atr1h").textContent=money(a1);
+    $("volRatio").textContent=fmt(s1.vr,2)+"×";
+    $("regime").textContent=(s4.trend==="Bullish"&&s1.trend==="Bullish")?"Bull trend":(s4.trend==="Bearish"&&s1.trend==="Bearish")?"Bear trend":"Mixed/sideways";
+
+    $("signal").textContent=sig.signal; $("signal").className="signal "+sig.signal;
+    $("score").textContent=sig.score+"/100"; $("signalWhy").textContent=sig.reason;
+    $("tfGrid").innerHTML=renderTF("15m",s15)+renderTF("1H",s1)+renderTF("4H",s4);
+
+    if(plan){
+      $("entry").textContent=money(plan.low)+" – "+money(plan.high); $("stop").textContent=money(plan.stop);
+      $("tp1").textContent=money(plan.tp1); $("tp2").textContent=money(plan.tp2); $("tp3").textContent=money(plan.tp3);
+      const account=+$("account").value||0, rp=(+$("riskPct").value||0)/100, riskCash=account*rp;
+      const perCoinRisk=Math.max(plan.mid-plan.stop,1e-12);
+      const rawQty=riskCash/perCoinRisk, cashCapQty=account/plan.mid, qty=Math.min(rawQty,cashCapQty);
+      $("size").textContent=fmt(qty,6)+" "+symbol.replace("USDT","");
+    }else{
+      ["entry","stop","tp1","tp2","tp3","size"].forEach(id=>$(id).textContent="—");
+    }
+
+    const closes=s1.closes.slice(-180), e20=ema(closes,20), e50=ema(closes,50);
+    renderChart(closes,e20,e50);
+
+    evaluateOpen(symbol,k15);
+    recordSignal(symbol,sig.signal,price,plan);
+
+    $("updated").textContent="Updated "+new Date().toLocaleString();
+    $("connText").textContent="Binance Spot live"; $("liveDot").className="dot live";
+  }catch(e){
+    $("error").textContent="Market data error: "+(e.message||e)+". Try Refresh now. If Binance is blocked in your region, this static version may need a small server proxy.";
+    $("error").style.display="block"; $("connText").textContent="Data unavailable"; $("liveDot").className="dot";
+  }
+}
+
+$("refresh").addEventListener("click",refresh);
+$("symbol").addEventListener("change",refresh);
+$("account").addEventListener("change",refresh);
+$("riskPct").addEventListener("change",refresh);
+$("clearHistory").addEventListener("click",()=>{localStorage.removeItem("spotdash_history");renderHistory();});
+window.addEventListener("resize",()=>{ if(state.data){ const c=state.data.s1.closes.slice(-180); renderChart(c,ema(c,20),ema(c,50)); }});
+renderHistory(); refresh(); setInterval(refresh,30000);
+</script>
+</body>
+</html>
