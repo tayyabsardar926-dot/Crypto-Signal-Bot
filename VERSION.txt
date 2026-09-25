@@ -1,0 +1,3 @@
+SpotPulse Market Scanner v2
+Full Binance active USDT universe scanner
+Commit-pinned release for cache-safe Chrome access.
