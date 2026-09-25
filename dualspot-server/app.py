@@ -8,7 +8,7 @@ S=requests.Session()
 B=['https://data-api.binance.vision/api/v3','https://api.binance.com/api/v3','https://api-gcp.binance.com/api/v3']
 M='https://api.mexc.com/api/v3'
 STABLE={'USDC','FDUSD','TUSD','USDP','DAI','BUSD','USD1','USDE','BFUSD','EUR','TRY','BRL','GBP','AUD','UAH','RUB','BIDR','IDRT','NGN','ZAR','PLN','RON','ARS','MXN','CZK','JPY','AEUR','EURI'}
-LOCK=threading.Lock(); STATE={'rows':[],'updated':0,'errors':[],'analytics_done':0,'analytics_total':0,'binance_count':0,'mexc_count':0,'unique_count':0}
+LOCK=threading.Lock(); STATE={'rows':[],'updated':0,'errors':[],'analytics_done':0,'analytics_total':0,'binance_count':0,'mexc_count':0,'unique_count':0,'analytics_running':False}
 HIST={}; HIST_T={}; STARTED=False
 
 def getj(url,timeout=12):
@@ -40,7 +40,7 @@ def exrows(ex):
   if not base or quote!='USDT' or not sym or base in STABLE or base.endswith(('UP','DOWN','BULL','BEAR')): continue
   if ex=='BINANCE' and st!='TRADING': continue
   if s.get('isSpotTradingAllowed') is False: continue
-  p,q=tickrow(tm.get(sym,{}));
+  p,q=tickrow(tm.get(sym,{}))
   if p<=0: continue
   out.append({'coin':base,'symbol':sym,'exchange':ex,'price':p,'quoteVolume':q})
  return out
@@ -104,35 +104,39 @@ def analyze(r):
  return {'rsi1h':r1,'rsi30m':r30,'trend1h':t1,'trend1d':td}
 
 def analytics_job(rows):
- with LOCK: STATE['analytics_total']=len(rows);STATE['analytics_done']=0
- def one(r):
-  try:return r['coin'],analyze(r)
-  except Exception:return r['coin'],None
- with ThreadPoolExecutor(max_workers=12) as ex:
-  fut=[ex.submit(one,r) for r in rows]
-  for f in as_completed(fut):
-   coin,a=f.result()
-   with LOCK:
-    for x in STATE['rows']:
-     if x['coin']==coin:
-      if a:x.update(a)
-      break
-    STATE['analytics_done']+=1
+ with LOCK:
+  if STATE['analytics_running']: return
+  STATE['analytics_running']=True;STATE['analytics_total']=len(rows);STATE['analytics_done']=0
+ try:
+  def one(r):
+   try:return r['coin'],analyze(r)
+   except Exception:return r['coin'],None
+  with ThreadPoolExecutor(max_workers=12) as ex:
+   fut=[ex.submit(one,r) for r in rows]
+   for f in as_completed(fut):
+    coin,a=f.result()
+    with LOCK:
+     for x in STATE['rows']:
+      if x['coin']==coin:
+       if a:x.update(a)
+       break
+     STATE['analytics_done']+=1
+ finally:
+  with LOCK: STATE['analytics_running']=False
 
 def refresh_all():
  while True:
   try:
    rows,errs=universe()
    with LOCK:
-    old={x['coin']:x for x in STATE['rows']}
-    merged=[]
+    old={x['coin']:x for x in STATE['rows']};merged=[]
     for r in rows:
      if r['coin'] in old:
       for k in ('rsi1h','rsi30m','trend1h','trend1d'):
        if k in old[r['coin']]:r[k]=old[r['coin']][k]
      merged.append(r)
-    STATE['rows']=merged;STATE['errors']=errs;STATE['updated']=int(time.time())
-   threading.Thread(target=analytics_job,args=(rows,),daemon=True).start()
+    STATE['rows']=merged;STATE['errors']=errs;STATE['updated']=int(time.time());running=STATE['analytics_running']
+   if not running: threading.Thread(target=analytics_job,args=(rows,),daemon=True).start()
   except Exception as e:
    with LOCK:STATE['errors']=[str(e)]
   time.sleep(60)
@@ -152,11 +156,11 @@ def home(): return send_file(os.path.join(os.path.dirname(__file__),'index.html'
 def health(): return jsonify({'ok':True})
 @app.get('/api/debug')
 def debug():
- with LOCK:return jsonify({k:STATE[k] for k in ('binance_count','mexc_count','unique_count','errors','analytics_done','analytics_total','updated')})
+ with LOCK:return jsonify({k:STATE[k] for k in ('binance_count','mexc_count','unique_count','errors','analytics_done','analytics_total','analytics_running','updated')})
 @app.get('/api/scan')
 def scan():
  with LOCK:
   rows=[dict(x) for x in STATE['rows']]
-  return jsonify({'rows':rows,'count':len(rows),'updated':STATE['updated'],'errors':STATE['errors'],'analyticsDone':STATE['analytics_done'],'analyticsTotal':STATE['analytics_total'],'binanceCount':STATE['binance_count'],'mexcCount':STATE['mexc_count']})
+  return jsonify({'rows':rows,'count':len(rows),'updated':STATE['updated'],'errors':STATE['errors'],'analyticsDone':STATE['analytics_done'],'analyticsTotal':STATE['analytics_total'],'analyticsRunning':STATE['analytics_running'],'binanceCount':STATE['binance_count'],'mexcCount':STATE['mexc_count']})
 
 if __name__=='__main__': app.run(host='0.0.0.0',port=int(os.getenv('PORT','8080')))
