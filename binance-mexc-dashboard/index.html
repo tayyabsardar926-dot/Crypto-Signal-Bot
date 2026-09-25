@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>DualSpot Scanner • Binance + MEXC</title>
+<style>
+:root{--bg:#07111c;--panel:#0d1926;--line:#213247;--text:#eef5fb;--muted:#8fa5bb;--green:#36dc93;--blue:#58b5ff;--yellow:#ffc45c;--red:#ff7272;--shadow:0 12px 32px rgba(0,0,0,.28)}
+*{box-sizing:border-box}body{margin:0;background:linear-gradient(180deg,#06101a,#081522);color:var(--text);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}.app{max-width:1540px;margin:auto;padding:20px}.top{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}.brand{display:flex;align-items:center;gap:12px}.logo{width:46px;height:46px;border-radius:14px;display:grid;place-items:center;background:linear-gradient(135deg,#35d595,#58b5ff);color:#06111b;font-weight:950}.title{font-size:23px;font-weight:900}.sub{color:var(--muted);font-size:12px;margin-top:3px}.live{padding:9px 12px;border:1px solid var(--line);border-radius:999px;background:#0b1723;color:#cfe0ef;font-size:12px}.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--green);margin-right:7px;box-shadow:0 0 0 4px rgba(54,220,147,.12)}
+.controls{display:grid;grid-template-columns:1.4fr .7fr .7fr auto;gap:10px;margin-top:16px;padding:12px;background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow)}input,select,button{height:42px;border-radius:10px;border:1px solid var(--line);background:#091521;color:var(--text);padding:0 12px;font-size:13px;outline:none}button{border:0;background:linear-gradient(135deg,#1fa974,#258eae);font-weight:850;cursor:pointer}button:disabled{opacity:.55;cursor:not-allowed}
+.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:14px 0}.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px;box-shadow:var(--shadow)}.label{font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}.value{font-size:24px;font-weight:900;margin-top:5px}.small{font-size:11px;color:var(--muted);margin-top:4px}.blue{color:var(--blue)}.green{color:var(--green)}.yellow{color:var(--yellow)}
+.rules{display:flex;gap:9px;flex-wrap:wrap;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:12px;margin-bottom:14px}.rule{border:1px solid var(--line);border-radius:999px;padding:7px 10px;color:var(--muted);font-size:12px}.rule b{color:var(--text)}
+.tableWrap{background:var(--panel);border:1px solid var(--line);border-radius:16px;overflow:auto;box-shadow:var(--shadow);min-height:420px}table{width:100%;border-collapse:collapse;min-width:920px}thead{position:sticky;top:0;background:#0b1723;z-index:2}th{padding:12px 11px;border-bottom:1px solid var(--line);text-align:left;color:#9ab1c8;font-size:10px;text-transform:uppercase;letter-spacing:.08em;white-space:nowrap}td{padding:12px 11px;border-bottom:1px solid rgba(33,50,71,.7);font-size:12px;white-space:nowrap}tbody tr:hover{background:#112132}.coin{font-weight:900;font-size:13px}.source{display:inline-flex;margin-left:7px;padding:3px 7px;border-radius:999px;font-size:9px;font-weight:850;border:1px solid var(--line);color:#b9cad9}.source.binance{color:#ffd85b}.source.mexc{color:#8ae9d8}.up{color:var(--green);font-weight:850}.rsi{font-variant-numeric:tabular-nums}.meter{display:inline-block;width:46px;height:5px;background:#203246;border-radius:999px;overflow:hidden;vertical-align:middle;margin-left:7px}.meter i{display:block;height:100%;background:var(--blue)}.empty{text-align:center;color:var(--muted);padding:70px 20px}.err{display:none;margin-bottom:12px;padding:10px 12px;border:1px solid #67333a;background:#2a171b;border-radius:12px;color:#ffb1b1;font-size:12px}.footer{font-size:11px;color:#72889c;line-height:1.55;padding:12px 3px}.muted{color:var(--muted)}
+@media(max-width:900px){.controls{grid-template-columns:1fr 1fr}.cards{grid-template-columns:1fr 1fr}}@media(max-width:560px){.app{padding:10px}.controls{grid-template-columns:1fr}.cards{grid-template-columns:1fr 1fr}.title{font-size:19px}.live{width:100%}}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="top">
+    <div class="brand"><div class="logo">DS</div><div><div class="title">DualSpot Scanner</div><div class="sub">Binance Spot + MEXC Spot • duplicate coins merged • 1H & 1D uptrend only</div></div></div>
+    <div class="live"><span class="dot"></span><span id="liveText">Auto refresh every 60s</span> <span id="lastTime"></span></div>
+  </div>
+
+  <div class="controls">
+    <input id="search" placeholder="Search coin e.g. BTC, LINK, SUI…" />
+    <select id="limit"><option value="100">Top 100</option><option value="200" selected>Top 200</option><option value="300">Top 300</option><option value="400">Top 400</option></select>
+    <select id="minVol"><option value="0">All volumes</option><option value="250000">Min $250K</option><option value="500000" selected>Min $500K</option><option value="1000000">Min $1M</option><option value="5000000">Min $5M</option></select>
+    <button id="refresh">Refresh now</button>
+  </div>
+
+  <div class="cards">
+    <div class="card"><div class="label">Unique coins</div><div id="unique" class="value blue">—</div><div class="small">Binance + MEXC, duplicates removed</div></div>
+    <div class="card"><div class="label">Scanned</div><div id="scanned" class="value">—</div><div class="small">Current scan universe</div></div>
+    <div class="card"><div class="label">1H + 1D uptrend</div><div id="matches" class="value green">—</div><div class="small">Only these coins are shown</div></div>
+    <div class="card"><div class="label">Refresh cycle</div><div class="value yellow">60s</div><div class="small">No per-second screen changes</div></div>
+  </div>
+
+  <div class="rules">
+    <span class="rule"><b>1H Uptrend:</b> EMA20 &gt; EMA50 + Price &gt; EMA20</span>
+    <span class="rule"><b>1D Uptrend:</b> EMA20 &gt; EMA50 + Price &gt; EMA20</span>
+    <span class="rule"><b>Duplicate rule:</b> same coin appears once; higher-volume exchange is used</span>
+    <span class="rule"><b>Data:</b> Binance + MEXC public Spot market APIs</span>
+  </div>
+
+  <div id="err" class="err"></div>
+  <div class="tableWrap">
+    <table>
+      <thead><tr><th>#</th><th>Coin</th><th>Price</th><th>1H RSI</th><th>30m RSI</th><th>1H Trend</th><th>1D Trend</th><th>24H Volume</th></tr></thead>
+      <tbody id="rows"><tr><td colspan="8" class="empty">Loading Binance + MEXC Spot market…</td></tr></tbody>
+    </table>
+  </div>
+  <div class="footer">Scanner sirf technical filter hai. Coin tab show hota hai jab selected source exchange par 1H aur 1D dono EMA trend rules pass karte hain. RSI values aur price har 60 seconds ke snapshot par update hote hain.</div>
+</div>
+<script>
+(()=>{
+'use strict';
+const $=id=>document.getElementById(id);
+let allRows=[];
+let timer=null;
+function price(n){n=Number(n);if(!Number.isFinite(n))return '—';if(n>=1000)return '$'+n.toLocaleString(undefined,{maximumFractionDigits:2});if(n>=1)return '$'+n.toLocaleString(undefined,{maximumFractionDigits:4});if(n>=.01)return '$'+n.toFixed(5);if(n>=.0001)return '$'+n.toFixed(7);return '$'+n.toPrecision(5)}
+function vol(n){n=Number(n);if(!Number.isFinite(n))return '—';if(n>=1e9)return '$'+(n/1e9).toFixed(2)+'B';if(n>=1e6)return '$'+(n/1e6).toFixed(1)+'M';if(n>=1e3)return '$'+(n/1e3).toFixed(0)+'K';return '$'+n.toFixed(0)}
+function rsi(v){v=Number(v);if(!Number.isFinite(v))return '—';return `<span class="rsi">${v.toFixed(1)}</span><span class="meter"><i style="width:${Math.max(0,Math.min(100,v))}%"></i></span>`}
+function render(){const q=$('search').value.trim().toUpperCase();const rows=allRows.filter(x=>!q||x.coin.includes(q)||x.symbol.includes(q));$('rows').innerHTML=rows.length?rows.map((x,i)=>`<tr><td>${i+1}</td><td class="coin">${x.coin}/USDT <span class="source ${x.exchange==='BINANCE'?'binance':'mexc'}">${x.exchange}</span></td><td>${price(x.price)}</td><td>${rsi(x.rsi1h)}</td><td>${rsi(x.rsi30m)}</td><td><span class="up">▲ UP</span></td><td><span class="up">▲ UP</span></td><td>${vol(x.quoteVolume)}</td></tr>`).join(''):'<tr><td colspan="8" class="empty">No coins match the current filter.</td></tr>'}
+async function scan(){if($('refresh').disabled)return;$('refresh').disabled=true;$('refresh').textContent='Scanning…';$('err').style.display='none';try{const u=new URL('/api/scan',location.origin);u.searchParams.set('limit',$('limit').value);u.searchParams.set('minVol',$('minVol').value);const res=await fetch(u,{cache:'no-store'});const d=await res.json();if(!res.ok)throw new Error(d.error||'Scan failed');allRows=d.rows||[];$('unique').textContent=d.uniqueUniverse??'—';$('scanned').textContent=d.scanned??'—';$('matches').textContent=d.matches??'—';$('lastTime').textContent='• '+new Date((d.updated||Date.now()/1000)*1000).toLocaleTimeString();render();if(d.errors&&d.errors.length){$('err').textContent='Partial data warning: '+d.errors.join(' | ');$('err').style.display='block'}}catch(e){$('err').textContent='Error: '+(e.message||e);$('err').style.display='block'}finally{$('refresh').disabled=false;$('refresh').textContent='Refresh now'}}
+function restart(){if(timer)clearInterval(timer);timer=setInterval(scan,60000)}
+$('refresh').addEventListener('click',scan);$('search').addEventListener('input',render);$('limit').addEventListener('change',()=>{scan();restart()});$('minVol').addEventListener('change',()=>{scan();restart()});scan();restart();
+})();
+</script>
+</body>
+</html>
