@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta name="theme-color" content="#07111f" />
+<title>RSI Recovery Spot Scanner V3</title>
+<style>
+:root{--bg:#07111f;--panel:#0e1c30;--line:#203550;--text:#edf4ff;--muted:#8fa5bf;--green:#20c997;--amber:#f4bd55;--red:#ff6b7a;--blue:#63a9ff}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 20% 0,#10294a,#07111f 45%);color:var(--text);font-family:Inter,system-ui,Segoe UI,Arial,sans-serif}.wrap{max-width:1500px;margin:auto;padding:16px}.top{display:flex;justify-content:space-between;gap:12px;align-items:center}.brand{display:flex;gap:12px;align-items:center}.logo{width:44px;height:44px;border-radius:14px;display:grid;place-items:center;background:linear-gradient(135deg,var(--green),var(--blue));color:#04111e;font-weight:950}.sub,.muted{color:var(--muted)}h1{margin:0;font-size:20px}.notice{margin:12px 0;padding:12px 14px;border:1px solid #28476c;background:#0c2038;border-radius:14px;color:#c3d3e7;font-size:12px;line-height:1.55}.controls{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}.ctl,button{border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:12px;padding:9px 11px}select,input{background:transparent;border:0;outline:0;color:var(--text)}select option{background:#0e1c30}button{cursor:pointer}.progress{height:5px;border-radius:99px;background:#102039;overflow:hidden}.progress>div{height:100%;width:0%;background:linear-gradient(90deg,var(--green),var(--blue))}.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:9px;margin:12px 0}.card,.panel{background:linear-gradient(180deg,rgba(16,31,53,.97),rgba(10,22,39,.97));border:1px solid var(--line);border-radius:17px}.card{padding:12px}.card .k{font-size:10px;color:var(--muted)}.card .v{font-size:22px;font-weight:900;margin-top:5px}.grid{display:grid;grid-template-columns:1.35fr .85fr;gap:12px}.ph{padding:13px 15px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}.pb{padding:14px}.tablewrap{overflow:auto;max-height:70vh}table{width:100%;border-collapse:collapse;font-size:11px}th,td{padding:9px 7px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}th{position:sticky;top:0;background:#0f1d31;color:var(--muted);z-index:1}tr:hover{background:#11243c;cursor:pointer}.pill{display:inline-block;padding:4px 8px;border-radius:999px;font-size:9px;font-weight:900}.MATCH{background:#123d31;color:#7ff0c0}.NEAR{background:#44371d;color:#ffd789}.FAIL{background:#45212a;color:#ff9fac}.detail{min-height:520px}.price{font-size:34px;font-weight:950}.hero{display:grid;grid-template-columns:1fr 1fr;gap:10px}.box,.mini,.tf,.lv{border:1px solid var(--line);border-radius:12px;padding:10px}.sig{font-size:28px;font-weight:950;color:var(--green)}.miniGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px}.mini small,.lv small{display:block;color:var(--muted);font-size:9px}.mini b,.lv b{display:block;margin-top:5px}.tfgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}.row{display:flex;justify-content:space-between;gap:8px;margin-top:5px;font-size:10px}.section{font-size:11px;font-weight:900;margin-top:14px;text-transform:uppercase;color:#bfd0e4}.rules{font-size:11px;line-height:1.55;color:#c5d4e6}.good{color:#7ff0c0}.warn{color:#ffd789}.bad{color:#ff9fac}.err{display:none;margin:10px 0;padding:10px;border:1px solid #64303a;background:#2b161b;color:#ffb0b8;border-radius:11px}@media(max-width:1050px){.grid{grid-template-columns:1fr}.kpis{grid-template-columns:repeat(2,1fr)}.tfgrid{grid-template-columns:1fr}.tablewrap{max-height:55vh}}@media(max-width:600px){.wrap{padding:9px}.hero{grid-template-columns:1fr}.miniGrid{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div class="brand"><div class="logo">RSI</div><div><h1>RSI Recovery Spot Scanner V3</h1><div class="sub">Binance Spot USDT • full-universe staged RSI pattern finder</div></div></div>
+    <div id="status" class="sub">Connecting…</div>
+  </div>
+
+  <div class="notice"><b>Exact setup:</b> 1H RSI <b>56–58</b> aur rising shape; 30m RSI <b>&gt; 62</b>; aur <b>2H ya synthetic 3H RSI</b> ne recent past mein 20–30 oversold zone touch ki ho, phir 30 ke upar recover karke ab bhi rise kar rahi ho. <b>V3 ab poora eligible Binance Spot USDT universe scan kar sakta hai</b>; rules loose nahi kiye gaye. Table mein sirf exact matches aayenge.</div>
+  <div id="err" class="err"></div>
+
+  <div class="controls">
+    <label class="ctl">Min 24h vol <select id="minv"><option value="0">All volumes</option><option value="100000">0.1M</option><option value="250000" selected>0.25M</option><option value="500000">0.5M</option><option value="1000000">1M</option><option value="5000000">5M</option></select></label>
+    <label class="ctl">Market coverage <select id="lim"><option value="100">Top 100</option><option value="200">Top 200</option><option value="300">Top 300</option><option value="ALL" selected>ALL eligible</option></select></label>
+    <label class="ctl">Oversold lookback <select id="look"><option value="8">8 candles</option><option value="12" selected>12 candles</option><option value="18">18 candles</option><option value="24">24 candles</option></select></label>
+    <label class="ctl">Search <input id="search" placeholder="e.g. LINK, SUI"></label>
+    <button id="go">Refresh scan</button>
+  </div>
+  <div class="progress"><div id="bar"></div></div>
+
+  <div class="kpis">
+    <div class="card"><div class="k">Tradable USDT pairs</div><div class="v" id="u">—</div></div>
+    <div class="card"><div class="k">Pairs screened</div><div class="v" id="n">—</div></div>
+    <div class="card"><div class="k">1H + 30m candidates</div><div class="v" id="m2">—</div></div>
+    <div class="card"><div class="k">Exact matches</div><div class="v" id="m">—</div></div>
+    <div class="card"><div class="k">Recovery-confirmed</div><div class="v" id="m3">—</div></div>
+  </div>
+
+  <div class="grid">
+    <section class="panel">
+      <div class="ph"><b>Exact RSI Pattern Matches</b><span class="muted" id="msg">Starting…</span></div>
+      <div class="pb tablewrap"><table>
+        <thead><tr><th>Pair</th><th>Match</th><th>Price</th><th>24h</th><th>24h Vol</th><th>1H RSI</th><th>1H slope</th><th>30m RSI</th><th>2H RSI</th><th>3H RSI</th><th>Recovery TF</th></tr></thead>
+        <tbody id="rows"><tr><td colspan="11" class="muted">Loading…</td></tr></tbody>
+      </table></div>
+    </section>
+
+    <section class="panel detail">
+      <div class="ph"><b id="dt">Pair detail</b><span class="muted" id="du">Select a row</span></div>
+      <div class="pb" id="detail"><div class="muted">Matching coin select karo.</div></div>
+    </section>
+  </div>
+</div>
+
+<script>
+const BASE=['https://data-api.binance.vision/api/v3','https://api.binance.com/api/v3','https://api-gcp.binance.com/api/v3'];
+const STABLE=new Set(['USDC','FDUSD','TUSD','USDP','DAI','BUSD','EUR','TRY','BRL','GBP','AUD','UAH','RUB','BIDR','IDRT','NGN','ZAR','PLN','RON','ARS','MXN','CZK','JPY']);
+const $=x=>document.getElementById(x);let uni=[],tm=new Map(),cache=new Map(),matches=[];
+const fmt=(n,d=2)=>Number.isFinite(+n)?(+n).toFixed(d):'—', money=n=>!Number.isFinite(+n)?'—':'$'+(+n).toLocaleString(undefined,{maximumFractionDigits:+n<1?6:2}), pct=n=>(+n>=0?'+':'')+fmt(n,2)+'%', sv=n=>+n>=1e9?fmt(+n/1e9,2)+'B':+n>=1e6?fmt(+n/1e6,1)+'M':fmt(+n/1e3,0)+'K';
+function pill(c,t=c){return `<span class="pill ${c}">${t}</span>`}function show(e){$('err').style.display='block';$('err').textContent=e.message||e}function clearErr(){$('err').style.display='none'}
+async function api(path){let last;for(const b of BASE){try{const r=await fetch(b+path,{cache:'no-store'});if(!r.ok)throw Error('HTTP '+r.status);return await r.json()}catch(e){last=e}}throw last||Error('Binance unavailable')}
+async function klines(s,i,l=220){const key=s+i+l,hit=cache.get(key);if(hit&&Date.now()-hit.t<90000)return hit.d;const d=await api(`/klines?symbol=${s}&interval=${i}&limit=${l}`);cache.set(key,{t:Date.now(),d});return d}
+function rsiSeries(vals,n=14){if(vals.length<n+1)return[];let out=Array(vals.length).fill(null),g=0,l=0;for(let i=1;i<=n;i++){const d=vals[i]-vals[i-1];g+=Math.max(d,0);l+=Math.max(-d,0)}g/=n;l/=n;out[n]=l===0?100:100-100/(1+g/l);for(let i=n+1;i<vals.length;i++){const d=vals[i]-vals[i-1],gg=Math.max(d,0),ll=Math.max(-d,0);g=(g*(n-1)+gg)/n;l=(l*(n-1)+ll)/n;out[i]=l===0?100:100-100/(1+g/l)}return out}
+function closeVals(k){return k.map(x=>+x[4])}
+function aggregate3h(k1){const groups=new Map();const span=3*60*60*1000;for(const z of k1){const bucket=Math.floor((+z[0])/span)*span;if(!groups.has(bucket))groups.set(bucket,[]);groups.get(bucket).push(z)}const out=[];for(const [t,g] of [...groups.entries()].sort((a,b)=>a[0]-b[0])){if(g.length<3)continue;const a=g[0],c=g[g.length-1];out.push([t,+a[1],Math.max(...g.map(x=>+x[2])),Math.min(...g.map(x=>+x[3])),+c[4],g.reduce((n,x)=>n+(+x[5]),0)])}return out}
+function slopeInfo(rs){const clean=rs.filter(x=>Number.isFinite(x));if(clean.length<5)return{now:null,prev:null,prev2:null,slope:null,rising:false};const now=clean.at(-1),prev=clean.at(-2),prev2=clean.at(-3),past=clean.at(-4);return{now,prev,prev2,slope:now-past,rising:now>prev&&now>past}}
+function recovery(rs,look){const c=rs.filter(x=>Number.isFinite(x));if(c.length<look+4)return{ok:false,min:null,now:null,crossed:false,rising:false};const now=c.at(-1),prev=c.at(-2),recent=c.slice(-(look+1),-1),min=Math.min(...recent),hadOversold=recent.some(x=>x>=20&&x<=30),hadBelow30=recent.some(x=>x<=30),crossed=hadBelow30&&now>30,rising=now>prev&&now>c.at(-4);return{ok:hadOversold&&crossed&&rising,min,now,crossed,rising}}
+function baseRow(sym){const t=tm.get(sym)||{};return{symbol:sym,price:+t.lastPrice||0,quoteVolume:+t.quoteVolume||0,change24h:+t.priceChangePercent||0}}
+async function screen1h(sym){const k1=await klines(sym,'1h',120);const r1=slopeInfo(rsiSeries(closeVals(k1)));const oneHourOk=r1.now>=56&&r1.now<=58&&r1.rising&&r1.slope>0;return{...baseRow(sym),k1,r1,oneHourOk}}
+async function screen30m(x){const k30=await klines(x.symbol,'30m',90);const r30=slopeInfo(rsiSeries(closeVals(k30)));return{...x,r30,mom30Ok:r30.now>62&&r30.rising}}
+async function confirmRecovery(x){const look=+$('look').value;const [k2]=await Promise.all([klines(x.symbol,'2h',90)]);const k3=aggregate3h(x.k1);const r2s=rsiSeries(closeVals(k2)),r3s=rsiSeries(closeVals(k3)),rec2=recovery(r2s,look),rec3=recovery(r3s,look);const recOk=rec2.ok||rec3.ok;return{...x,exact:x.oneHourOk&&x.mom30Ok&&recOk,rec2,rec3,recoveryTF:rec2.ok&&rec3.ok?'2H + 3H':rec2.ok?'2H':rec3.ok?'3H':'—'}}
+async function loadUniverse(){const [ex,ticks]=await Promise.all([api('/exchangeInfo'),api('/ticker/24hr')]);tm=new Map(ticks.map(x=>[x.symbol,x]));uni=ex.symbols.filter(s=>s.status==='TRADING'&&s.quoteAsset==='USDT'&&s.isSpotTradingAllowed!==false&&!STABLE.has(s.baseAsset)&&!/(UP|DOWN|BULL|BEAR)$/.test(s.baseAsset)).map(s=>s.symbol);$('u').textContent=uni.length}
+async function pool(items,n,fn,onp){let out=[],idx=0,done=0;async function w(){while(idx<items.length){const it=items[idx++];try{out.push(await fn(it))}catch(e){}done++;onp&&onp(done,items.length)}}await Promise.all(Array.from({length:Math.min(n,items.length)},w));return out}
+function render(){const q=$('search').value.trim().toUpperCase();let rows=matches;if(q)rows=rows.filter(x=>x.symbol.includes(q));$('rows').innerHTML=rows.length?rows.map(x=>`<tr data-s="${x.symbol}"><td><b>${x.symbol.replace('USDT','/USDT')}</b></td><td>${pill('MATCH','EXACT')}</td><td>${money(x.price)}</td><td style="color:${x.change24h>=0?'var(--green)':'var(--red)'}">${pct(x.change24h)}</td><td>${sv(x.quoteVolume)}</td><td><b>${fmt(x.r1.now,1)}</b></td><td class="good">+${fmt(x.r1.slope,2)}</td><td><b>${fmt(x.r30.now,1)}</b></td><td>${fmt(x.rec2.now,1)}</td><td>${fmt(x.rec3.now,1)}</td><td>${x.recoveryTF}</td></tr>`).join(''):`<tr><td colspan="11" class="muted">Abhi exact match nahi mila.</td></tr>`;document.querySelectorAll('#rows tr[data-s]').forEach(tr=>tr.onclick=()=>openDetail(tr.dataset.s))}
+function detailHtml(x){return `<div class="hero"><div><div class="price">${money(x.price)}</div><div class="muted" style="margin-top:4px">24h ${pct(x.change24h)} • Vol ${sv(x.quoteVolume)} USDT</div></div><div class="box"><div class="muted">PATTERN STATUS</div><div class="sig">EXACT MATCH</div><div class="rules" style="margin-top:8px">Ye coin tino frozen rules ek sath meet kar raha hai.</div></div></div><div class="miniGrid"><div class="mini"><small>1H RSI</small><b>${fmt(x.r1.now,1)}</b></div><div class="mini"><small>1H rise</small><b class="good">+${fmt(x.r1.slope,2)}</b></div><div class="mini"><small>30m RSI</small><b>${fmt(x.r30.now,1)}</b></div><div class="mini"><small>Recovery TF</small><b>${x.recoveryTF}</b></div></div><div class="section">Recovery evidence</div><div class="tfgrid"><div class="tf"><b>2H RSI</b><div class="row"><span>Current</span><b>${fmt(x.rec2.now,1)}</b></div><div class="row"><span>Recent min</span><b>${fmt(x.rec2.min,1)}</b></div><div class="row"><span>Recovered 20–30?</span><b class="${x.rec2.ok?'good':'bad'}">${x.rec2.ok?'YES':'NO'}</b></div></div><div class="tf"><b>3H RSI (synthetic)</b><div class="row"><span>Current</span><b>${fmt(x.rec3.now,1)}</b></div><div class="row"><span>Recent min</span><b>${fmt(x.rec3.min,1)}</b></div><div class="row"><span>Recovered 20–30?</span><b class="${x.rec3.ok?'good':'bad'}">${x.rec3.ok?'YES':'NO'}</b></div></div><div class="tf"><b>30m momentum</b><div class="row"><span>RSI &gt; 62</span><b class="${x.r30.now>62?'good':'bad'}">${fmt(x.r30.now,1)}</b></div><div class="row"><span>Rising?</span><b class="${x.r30.rising?'good':'bad'}">${x.r30.rising?'YES':'NO'}</b></div></div></div><div class="section">Frozen rule</div><div class="rules">1H RSI 56–58 + rising shape • 30m RSI &gt; 62 + rising • 2H ya 3H RSI recent 20–30 zone se recover karke 30 ke upar rising. Ye scanner setup finder hai, profitability claim nahi.</div>`}
+function openDetail(sym){const x=matches.find(z=>z.symbol===sym);if(!x)return;$('dt').textContent=sym.replace('USDT','/USDT');$('du').textContent='Updated '+new Date().toLocaleTimeString();$('detail').innerHTML=detailHtml(x)}
+async function scan(){clearErr();$('status').textContent='Scanning full market…';$('bar').style.width='0%';$('msg').textContent='Loading Binance universe…';try{
+if(!uni.length)await loadUniverse();
+const min=+$('minv').value,limVal=$('lim').value;
+let poolRows=uni.map(baseRow).filter(x=>x.quoteVolume>=min).sort((a,b)=>b.quoteVolume-a.quoteVolume);
+if(limVal!=='ALL')poolRows=poolRows.slice(0,+limVal);
+const syms=poolRows.map(x=>x.symbol);
+$('rows').innerHTML=`<tr><td colspan="11" class="muted">Stage 1/3: screening 1H RSI across ${syms.length} pairs…</td></tr>`;
+const stage1=await pool(syms,8,screen1h,(d,t)=>{$('bar').style.width=(55*d/t)+'%';$('msg').textContent=`1H screen ${d}/${t}`});
+const oneH=stage1.filter(x=>x.oneHourOk);
+$('n').textContent=stage1.length;
+$('rows').innerHTML=`<tr><td colspan="11" class="muted">Stage 2/3: checking 30m momentum on ${oneH.length} 1H candidates…</td></tr>`;
+const stage2=await pool(oneH,6,screen30m,(d,t)=>{$('bar').style.width=(55+25*(t?d/t:1))+'%';$('msg').textContent=`30m confirm ${d}/${t}`});
+const mom=stage2.filter(x=>x.mom30Ok);
+$('m2').textContent=mom.length;
+$('rows').innerHTML=`<tr><td colspan="11" class="muted">Stage 3/3: checking 2H/3H oversold recovery on ${mom.length} candidates…</td></tr>`;
+const stage3=await pool(mom,5,confirmRecovery,(d,t)=>{$('bar').style.width=(80+20*(t?d/t:1))+'%';$('msg').textContent=`Recovery confirm ${d}/${t}`});
+matches=stage3.filter(x=>x.exact).sort((a,b)=>b.quoteVolume-a.quoteVolume);
+$('m').textContent=matches.length;
+$('m3').textContent=stage3.filter(x=>x.rec2?.ok||x.rec3?.ok).length;
+render();$('bar').style.width='100%';$('msg').textContent=`Updated ${new Date().toLocaleTimeString()} • screened ${stage1.length} pairs`;$('status').textContent='Binance live • full-universe mode';if(matches.length)openDetail(matches[0].symbol);else{$('detail').innerHTML='<div class="muted">Is waqt exact pattern match nahi mila. Scanner ne selected universe poora check kiya hai.</div>'}
+}catch(e){show(e);$('status').textContent='Error'}}
+$('go').onclick=scan;$('search').addEventListener('input',render);$('look').onchange=scan;$('lim').onchange=scan;$('minv').onchange=scan;scan();setInterval(scan,180000);
+</script>
+</body>
+</html>
