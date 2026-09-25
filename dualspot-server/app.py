@@ -8,7 +8,7 @@ S=requests.Session()
 B=['https://data-api.binance.vision/api/v3','https://api.binance.com/api/v3','https://api-gcp.binance.com/api/v3']
 M='https://api.mexc.com/api/v3'
 STABLE={'USDC','FDUSD','TUSD','USDP','DAI','BUSD','USD1','USDE','BFUSD','EUR','TRY','BRL','GBP','AUD','UAH','RUB','BIDR','IDRT','NGN','ZAR','PLN','RON','ARS','MXN','CZK','JPY','AEUR','EURI'}
-LOCK=threading.Lock(); STATE={'rows':[],'updated':0,'errors':[],'analytics_done':0,'analytics_total':0}
+LOCK=threading.Lock(); STATE={'rows':[],'updated':0,'errors':[],'analytics_done':0,'analytics_total':0,'binance_count':0,'mexc_count':0,'unique_count':0}
 HIST={}; HIST_T={}; STARTED=False
 
 def getj(url,timeout=12):
@@ -56,6 +56,9 @@ def universe():
   old=d.get(r['coin'])
   if old is None or r['quoteVolume']>old['quoteVolume']: d[r['coin']]=r
  rows=sorted(d.values(),key=lambda x:x['quoteVolume'],reverse=True)
+ with LOCK:
+  STATE['binance_count']=len(a);STATE['mexc_count']=len(b);STATE['unique_count']=len(rows)
+ print(f"UNIVERSE binance={len(a)} mexc={len(b)} unique={len(rows)} errors={errors}",flush=True)
  return rows,errors
 
 def ema(v,n):
@@ -147,10 +150,13 @@ def _s(): start_bg()
 def home(): return send_file(os.path.join(os.path.dirname(__file__),'index.html'))
 @app.get('/api/health')
 def health(): return jsonify({'ok':True})
+@app.get('/api/debug')
+def debug():
+ with LOCK:return jsonify({k:STATE[k] for k in ('binance_count','mexc_count','unique_count','errors','analytics_done','analytics_total','updated')})
 @app.get('/api/scan')
 def scan():
  with LOCK:
   rows=[dict(x) for x in STATE['rows']]
-  return jsonify({'rows':rows,'count':len(rows),'updated':STATE['updated'],'errors':STATE['errors'],'analyticsDone':STATE['analytics_done'],'analyticsTotal':STATE['analytics_total']})
+  return jsonify({'rows':rows,'count':len(rows),'updated':STATE['updated'],'errors':STATE['errors'],'analyticsDone':STATE['analytics_done'],'analyticsTotal':STATE['analytics_total'],'binanceCount':STATE['binance_count'],'mexcCount':STATE['mexc_count']})
 
 if __name__=='__main__': app.run(host='0.0.0.0',port=int(os.getenv('PORT','8080')))
