@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>DualSpot Scanner • Binance + MEXC</title>
+<style>
+:root{--bg:#07111c;--panel:#0d1926;--line:#213247;--text:#eef5fb;--muted:#8fa5bb;--green:#36dc93;--blue:#58b5ff;--yellow:#ffc45c;--red:#ff7272;--shadow:0 12px 32px rgba(0,0,0,.28)}
+*{box-sizing:border-box}body{margin:0;background:linear-gradient(180deg,#06101a,#081522);color:var(--text);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}.app{max-width:1540px;margin:auto;padding:20px}.top{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}.brand{display:flex;align-items:center;gap:12px}.logo{width:46px;height:46px;border-radius:14px;display:grid;place-items:center;background:linear-gradient(135deg,#35d595,#58b5ff);color:#06111b;font-weight:950}.title{font-size:23px;font-weight:900}.sub{color:var(--muted);font-size:12px;margin-top:3px}.live{padding:9px 12px;border:1px solid var(--line);border-radius:999px;background:#0b1723;color:#cfe0ef;font-size:12px}.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--green);margin-right:7px;box-shadow:0 0 0 4px rgba(54,220,147,.12)}
+.controls{display:grid;grid-template-columns:1.4fr .7fr .7fr auto;gap:10px;margin-top:16px;padding:12px;background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow)}input,select,button{height:42px;border-radius:10px;border:1px solid var(--line);background:#091521;color:var(--text);padding:0 12px;font-size:13px;outline:none}button{border:0;background:linear-gradient(135deg,#1fa974,#258eae);font-weight:850;cursor:pointer}button:disabled{opacity:.55;cursor:not-allowed}
+.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:14px 0}.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px;box-shadow:var(--shadow)}.label{font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}.value{font-size:24px;font-weight:900;margin-top:5px}.small{font-size:11px;color:var(--muted);margin-top:4px}.blue{color:var(--blue)}.green{color:var(--green)}.yellow{color:var(--yellow)}
+.rules{display:flex;gap:9px;flex-wrap:wrap;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:12px;margin-bottom:14px}.rule{border:1px solid var(--line);border-radius:999px;padding:7px 10px;color:var(--muted);font-size:12px}.rule b{color:var(--text)}
+.progressWrap{height:5px;background:#0b1723;border-radius:999px;overflow:hidden;margin:0 0 12px;display:none}.progress{height:100%;width:0;background:linear-gradient(90deg,#35d595,#58b5ff);transition:width .2s}
+.tableWrap{background:var(--panel);border:1px solid var(--line);border-radius:16px;overflow:auto;box-shadow:var(--shadow);min-height:420px}table{width:100%;border-collapse:collapse;min-width:920px}thead{position:sticky;top:0;background:#0b1723;z-index:2}th{padding:12px 11px;border-bottom:1px solid var(--line);text-align:left;color:#9ab1c8;font-size:10px;text-transform:uppercase;letter-spacing:.08em;white-space:nowrap}td{padding:12px 11px;border-bottom:1px solid rgba(33,50,71,.7);font-size:12px;white-space:nowrap}tbody tr:hover{background:#112132}.coin{font-weight:900;font-size:13px}.source{display:inline-flex;margin-left:7px;padding:3px 7px;border-radius:999px;font-size:9px;font-weight:850;border:1px solid var(--line);color:#b9cad9}.source.binance{color:#ffd85b}.source.mexc{color:#8ae9d8}.up{color:var(--green);font-weight:850}.rsi{font-variant-numeric:tabular-nums}.meter{display:inline-block;width:46px;height:5px;background:#203246;border-radius:999px;overflow:hidden;vertical-align:middle;margin-left:7px}.meter i{display:block;height:100%;background:var(--blue)}.empty{text-align:center;color:var(--muted);padding:70px 20px}.err{display:none;margin-bottom:12px;padding:10px 12px;border:1px solid #67333a;background:#2a171b;border-radius:12px;color:#ffb1b1;font-size:12px}.footer{font-size:11px;color:#72889c;line-height:1.55;padding:12px 3px}.muted{color:var(--muted)}
+@media(max-width:900px){.controls{grid-template-columns:1fr 1fr}.cards{grid-template-columns:1fr 1fr}}@media(max-width:560px){.app{padding:10px}.controls{grid-template-columns:1fr}.cards{grid-template-columns:1fr 1fr}.title{font-size:19px}.live{width:100%}}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="top">
+    <div class="brand"><div class="logo">DS</div><div><div class="title">DualSpot Scanner</div><div class="sub">Binance Spot + MEXC Spot • duplicate coins merged • 1H & 1D uptrend only</div></div></div>
+    <div class="live"><span class="dot"></span><span>Auto refresh every 60s</span> <span id="lastTime"></span></div>
+  </div>
+
+  <div class="controls">
+    <input id="search" placeholder="Search coin e.g. BTC, LINK, SUI…" />
+    <select id="limit"><option value="100" selected>Top 100</option><option value="200">Top 200</option><option value="300">Top 300</option><option value="400">Top 400</option></select>
+    <select id="minVol"><option value="0">All volumes</option><option value="250000">Min $250K</option><option value="500000" selected>Min $500K</option><option value="1000000">Min $1M</option><option value="5000000">Min $5M</option></select>
+    <button id="refresh">Refresh now</button>
+  </div>
+
+  <div class="cards">
+    <div class="card"><div class="label">Unique coins</div><div id="unique" class="value blue">—</div><div class="small">Binance + MEXC, duplicates removed</div></div>
+    <div class="card"><div class="label">Scanned</div><div id="scanned" class="value">—</div><div class="small">Current scan universe</div></div>
+    <div class="card"><div class="label">1H + 1D uptrend</div><div id="matches" class="value green">—</div><div class="small">Only these coins are shown</div></div>
+    <div class="card"><div class="label">Refresh cycle</div><div class="value yellow">60s</div><div class="small">No per-second screen changes</div></div>
+  </div>
+
+  <div class="rules">
+    <span class="rule"><b>1H Uptrend:</b> EMA20 &gt; EMA50 + Price &gt; EMA20</span>
+    <span class="rule"><b>1D Uptrend:</b> EMA20 &gt; EMA50 + Price &gt; EMA20</span>
+    <span class="rule"><b>Duplicate:</b> same coin once; higher-volume exchange selected</span>
+    <span class="rule"><b>Spot only:</b> USDT pairs from Binance + MEXC</span>
+  </div>
+
+  <div id="progressWrap" class="progressWrap"><div id="progress" class="progress"></div></div>
+  <div id="err" class="err"></div>
+  <div class="tableWrap">
+    <table><thead><tr><th>#</th><th>Coin</th><th>Price</th><th>1H RSI</th><th>30m RSI</th><th>1H Trend</th><th>1D Trend</th><th>24H Volume</th></tr></thead>
+    <tbody id="rows"><tr><td colspan="8" class="empty">Loading Binance + MEXC Spot market…</td></tr></tbody></table>
+  </div>
+  <div class="footer">Technical scanner only. Same coin agar dono exchanges par ho to 24h USDT volume zyada wale exchange ki market data use hoti hai. Screen values ek minute ke scan cycle par update hoti hain.</div>
+</div>
+<script>
+(()=>{
+'use strict';
+const BINANCE=['https://data-api.binance.vision/api/v3','https://api.binance.com/api/v3','https://api-gcp.binance.com/api/v3'];
+const MEXC='https://api.mexc.com/api/v3';
+const STABLE=new Set(['USDC','FDUSD','TUSD','USDP','DAI','BUSD','USD1','USDE','BFUSD','EUR','TRY','BRL','GBP','AUD','UAH','RUB','BIDR','IDRT','NGN','ZAR','PLN','RON','ARS','MXN','CZK','JPY','AEUR','EURI']);
+const REFRESH=60000;
+const $=id=>document.getElementById(id);
+let displayRows=[],scanTimer=null,scanning=false;
+const cache=new Map();
+function sf(v,d=0){const n=Number(v);return Number.isFinite(n)?n:d}
+async function fetchJSON(url){const r=await fetch(url,{cache:'no-store'});if(!r.ok)throw new Error(`HTTP ${r.status} ${url}`);return r.json()}
+async function bget(path){let last;for(const b of BINANCE){try{return await fetchJSON(b+path)}catch(e){last=e}}throw last||new Error('Binance unavailable')}
+async function mget(path){return fetchJSON(MEXC+path)}
+async function cached(key,ttl,fn){const now=Date.now(),x=cache.get(key);if(x&&now-x.t<ttl)return x.v;const v=await fn();cache.set(key,{t:now,v});return v}
+function okStatus(s,ex){const st=String(s.status??'').toUpperCase();if(ex==='BINANCE')return st==='TRADING';return !st||['TRADING','ENABLED','1','TRUE'].includes(st)}
+function tickerFields(t){const price=sf(t.lastPrice??t.price??t.last);const qv=sf(t.quoteVolume??t.amount??t.turnover);let chg=sf(t.priceChangePercent);const op=sf(t.openPrice);if(!chg&&op&&price)chg=(price/op-1)*100;return{price,qv,chg}}
+async function exchangeRows(ex){const [info,ticksRaw]=await Promise.all([cached('info:'+ex,1800000,()=>ex==='BINANCE'?bget('/exchangeInfo'):mget('/exchangeInfo')),cached('ticks:'+ex,55000,()=>ex==='BINANCE'?bget('/ticker/24hr'):mget('/ticker/24hr'))]);const syms=Array.isArray(info)?info:(info.symbols||[]);const ticks=Array.isArray(ticksRaw)?ticksRaw:(ticksRaw.data||ticksRaw.symbols||[]);const tm=new Map(ticks.filter(x=>x&&x.symbol).map(x=>[String(x.symbol).toUpperCase(),x]));const out=[];for(const s of syms){if(!s||!okStatus(s,ex)||s.isSpotTradingAllowed===false)continue;const base=String(s.baseAsset||'').toUpperCase(),quote=String(s.quoteAsset||'').toUpperCase(),symbol=String(s.symbol||'').toUpperCase();if(!base||quote!=='USDT'||!symbol||STABLE.has(base)||/(UP|DOWN|BULL|BEAR)$/.test(base))continue;const f=tickerFields(tm.get(symbol)||{});out.push({coin:base,symbol,exchange:ex,price:f.price,quoteVolume:f.qv,change24h:f.chg})}return out}
+async function universe(){const errors=[];let a=[],b=[];try{a=await exchangeRows('BINANCE')}catch(e){errors.push('Binance: '+e.message)}try{b=await exchangeRows('MEXC')}catch(e){errors.push('MEXC: '+e.message)}const map=new Map();for(const r of [...a,...b]){const old=map.get(r.coin);if(!old||r.quoteVolume>old.quoteVolume)map.set(r.coin,r)}const rows=[...map.values()].sort((x,y)=>y.quoteVolume-x.quoteVolume);return{rows,errors}}
+function interval(ex,tf){if(ex==='BINANCE')return tf;return tf==='1h'?'60m':tf}
+async function klines(r,tf){const key=`k:${r.exchange}:${r.symbol}:${tf}`;return cached(key,55000,async()=>{const q=`/klines?symbol=${encodeURIComponent(r.symbol)}&interval=${encodeURIComponent(interval(r.exchange,tf))}&limit=90`;const d=r.exchange==='BINANCE'?await bget(q):await mget(q);if(!Array.isArray(d))throw new Error('Bad kline data');return d})}
+function closes(k){return k.map(x=>sf(x[4],NaN)).filter(Number.isFinite)}
+function ema(v,n){if(v.length<n)return NaN;let e=v.slice(0,n).reduce((a,b)=>a+b,0)/n,k=2/(n+1);for(let i=n;i<v.length;i++)e=v[i]*k+e*(1-k);return e}
+function rsi(v,n=14){if(v.length<n+1)return NaN;let g=0,l=0;for(let i=1;i<=n;i++){const d=v[i]-v[i-1];if(d>=0)g+=d;else l-=d}let ag=g/n,al=l/n;for(let i=n+1;i<v.length;i++){const d=v[i]-v[i-1],gg=d>0?d:0,ll=d<0?-d:0;ag=(ag*(n-1)+gg)/n;al=(al*(n-1)+ll)/n}return al===0?100:100-100/(1+ag/al)}
+async function stats(r,tf){const c=closes(await klines(r,tf));if(c.length&&r.price)c[c.length-1]=r.price;const e20=ema(c,20),e50=ema(c,50),p=c[c.length-1];return{up:Number.isFinite(e20)&&Number.isFinite(e50)&&p>e20&&e20>e50,rsi:rsi(c)}}
+async function analyze(r){const s1=await stats(r,'1h');if(!s1.up)return null;const sd=await stats(r,'1d');if(!sd.up)return null;const s30=await stats(r,'30m');return{...r,rsi1h:s1.rsi,rsi30m:s30.rsi,trend1h:'UP',trend1d:'UP'}}
+async function pool(items,workers,fn,onProgress){let i=0,done=0,out=[];async function worker(){while(true){const idx=i++;if(idx>=items.length)return;try{const v=await fn(items[idx]);if(v)out.push(v)}catch(_){}finally{done++;onProgress?.(done,items.length)}}}await Promise.all(Array.from({length:Math.min(workers,items.length)},worker));return out}
+function fmtPrice(n){n=Number(n);if(!Number.isFinite(n))return'—';if(n>=1000)return'$'+n.toLocaleString(undefined,{maximumFractionDigits:2});if(n>=1)return'$'+n.toLocaleString(undefined,{maximumFractionDigits:4});if(n>=.01)return'$'+n.toFixed(5);if(n>=.0001)return'$'+n.toFixed(7);return'$'+n.toPrecision(5)}
+function fmtVol(n){n=Number(n);if(!Number.isFinite(n))return'—';if(n>=1e9)return'$'+(n/1e9).toFixed(2)+'B';if(n>=1e6)return'$'+(n/1e6).toFixed(1)+'M';if(n>=1e3)return'$'+(n/1e3).toFixed(0)+'K';return'$'+n.toFixed(0)}
+function rsiCell(v){v=Number(v);if(!Number.isFinite(v))return'—';return`${v.toFixed(1)} <span class="meter"><i style="width:${Math.max(0,Math.min(100,v))}%"></i></span>`}
+function render(){const q=$('search').value.trim().toUpperCase();const rows=displayRows.filter(x=>!q||x.coin.includes(q)||x.symbol.includes(q));$('rows').innerHTML=rows.length?rows.map((x,i)=>`<tr><td>${i+1}</td><td class="coin">${x.coin}/USDT <span class="source ${x.exchange==='BINANCE'?'binance':'mexc'}">${x.exchange}</span></td><td>${fmtPrice(x.price)}</td><td>${rsiCell(x.rsi1h)}</td><td>${rsiCell(x.rsi30m)}</td><td><span class="up">▲ UP</span></td><td><span class="up">▲ UP</span></td><td>${fmtVol(x.quoteVolume)}</td></tr>`).join(''):'<tr><td colspan="8" class="empty">No coins match the current filter.</td></tr>'}
+async function scan(){if(scanning)return;scanning=true;$('refresh').disabled=true;$('refresh').textContent='Scanning…';$('err').style.display='none';$('progressWrap').style.display='block';$('progress').style.width='2%';$('rows').innerHTML='<tr><td colspan="8" class="empty">Scanning Binance + MEXC Spot coins…</td></tr>';try{const u=await universe();$('unique').textContent=u.rows.length;const minV=Number($('minVol').value||0),limit=Number($('limit').value||100);const chosen=u.rows.filter(x=>x.quoteVolume>=minV).slice(0,limit);$('scanned').textContent=chosen.length;const matches=await pool(chosen,8,analyze,(d,t)=>{$('progress').style.width=Math.max(3,Math.round(d/t*100))+'%'});matches.sort((a,b)=>b.quoteVolume-a.quoteVolume);displayRows=matches;$('matches').textContent=matches.length;$('lastTime').textContent='• '+new Date().toLocaleTimeString();render();if(u.errors.length){$('err').textContent='Partial data warning: '+u.errors.join(' | ');$('err').style.display='block'}}catch(e){$('err').textContent='Error: '+e.message+'. Browser/network ne exchange API block ki ho to page dobara refresh karein.';$('err').style.display='block'}finally{scanning=false;$('refresh').disabled=false;$('refresh').textContent='Refresh now';setTimeout(()=>{$('progressWrap').style.display='none'},500)}}
+function restart(){if(scanTimer)clearInterval(scanTimer);scanTimer=setInterval(scan,REFRESH)}
+$('refresh').onclick=scan;$('search').addEventListener('input',render);$('limit').onchange=()=>{scan();restart()};$('minVol').onchange=()=>{scan();restart()};scan();restart();
+})();
+</script>
+</body>
+</html>
